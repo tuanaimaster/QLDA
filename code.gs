@@ -819,7 +819,7 @@ function getInitialDataWithAuth(token) {
   } catch (e) {
     console.error('Error in fast load:', e);
     // Fallback to old method
-    return getDataForUser();
+    return getDataForUser(token);
   }
 }
 
