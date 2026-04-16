@@ -230,13 +230,12 @@
     const userRole = document.getElementById('user-role');
 
     if (userAvatar && userName && userRole) {
-      const initials = user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2);
-      userAvatar.textContent = initials;
+      const initials = user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+      if (user.avatar) {
+        userAvatar.innerHTML = `<img src="${user.avatar}" class="w-full h-full object-cover rounded-full" alt="avatar" onerror="this.parentElement.textContent='${initials}';this.parentElement.innerHTML='${initials}';" />`;
+      } else {
+        userAvatar.textContent = initials;
+      }
       userName.textContent = user.name;
       userRole.textContent = user.role;
     }
@@ -5397,9 +5396,48 @@
     }
     const modal = document.getElementById('edit-profile-modal');
     if (!modal) return;
+
+    // Populate basic fields
     document.getElementById('profile-name').value = currentUser.name || '';
-    document.getElementById('profile-position').value = currentUser.position || currentUser.role || '';
+    document.getElementById('profile-position').value = currentUser.position || '';
     document.getElementById('profile-email').value = currentUser.email || '';
+    document.getElementById('profile-phone').value = currentUser.phone || '';
+    document.getElementById('profile-birthday').value = currentUser.birthday || '';
+    document.getElementById('profile-department').value = currentUser.department || '';
+    document.getElementById('profile-bio').value = currentUser.bio || '';
+
+    // Avatar display
+    const avatarDisplay = document.getElementById('profile-avatar-display');
+    if (avatarDisplay) {
+      const initials = (currentUser.name || '?').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+      if (currentUser.avatar) {
+        avatarDisplay.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar" onerror="this.parentElement.textContent='${initials}';" />`;
+      } else {
+        avatarDisplay.textContent = initials;
+      }
+    }
+
+    // Stats bar
+    const statsBar = document.getElementById('profile-stats-bar');
+    if (statsBar) {
+      const completedCount = typeof getUserCompletedCount === 'function' ? getUserCompletedCount(currentUser.name) : 0;
+      const badgeCount = typeof getUserBadges === 'function' ? getUserBadges(completedCount).length : 0;
+      const points = typeof getUserPoints === 'function' ? getUserPoints(completedCount) : 0;
+      statsBar.innerHTML = `
+        <div class="text-center px-4 border-r border-gray-100">
+          <div class="text-2xl font-bold text-indigo-600">${completedCount}</div>
+          <div class="text-xs text-gray-400 mt-0.5">Nhiệm vụ</div>
+        </div>
+        <div class="text-center px-4 border-r border-gray-100">
+          <div class="text-2xl font-bold text-amber-500">${badgeCount}</div>
+          <div class="text-xs text-gray-400 mt-0.5">Huy hiệu</div>
+        </div>
+        <div class="text-center px-4">
+          <div class="text-2xl font-bold text-emerald-500">${points}</div>
+          <div class="text-xs text-gray-400 mt-0.5">Điểm XP</div>
+        </div>`;
+    }
+
     document.getElementById('profile-error').classList.add('hidden');
     document.getElementById('profile-success').classList.add('hidden');
     modal.classList.remove('opacity-0', 'invisible');
@@ -5416,6 +5454,10 @@
   function saveProfile() {
     const name = (document.getElementById('profile-name').value || '').trim();
     const position = (document.getElementById('profile-position').value || '').trim();
+    const phone = (document.getElementById('profile-phone').value || '').trim();
+    const birthday = (document.getElementById('profile-birthday').value || '').trim();
+    const department = (document.getElementById('profile-department').value || '').trim();
+    const bio = (document.getElementById('profile-bio').value || '').trim();
     const errEl = document.getElementById('profile-error');
     const successEl = document.getElementById('profile-success');
     const saveBtn = document.getElementById('save-profile-btn');
@@ -5439,6 +5481,10 @@
         if (resp.success) {
           currentUser.name = resp.name || name;
           currentUser.position = resp.position || position;
+          currentUser.phone = resp.phone !== undefined ? resp.phone : phone;
+          currentUser.birthday = resp.birthday !== undefined ? resp.birthday : birthday;
+          currentUser.department = resp.department !== undefined ? resp.department : department;
+          currentUser.bio = resp.bio !== undefined ? resp.bio : bio;
           updateUIForUser(currentUser);
           successEl.textContent = 'Cập nhật hồ sơ thành công!';
           successEl.classList.remove('hidden');
@@ -5455,7 +5501,56 @@
         errEl.textContent = 'Lỗi kết nối: ' + err.message;
         errEl.classList.remove('hidden');
       })
-      .updateProfile(name, position, currentToken);
+      .updateProfile({ name: name, position: position, phone: phone, birthday: birthday, department: department, bio: bio }, currentToken);
+  }
+
+  function uploadAvatarFromInput(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Ảnh quá lớn, vui lòng chọn ảnh dưới 2MB', 'error');
+      input.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const dataUrl = e.target.result;
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type;
+      const ext = file.name.split('.').pop() || 'jpg';
+      const filename = 'avatar_' + Date.now() + '.' + ext;
+
+      // Show preview immediately
+      const avatarDisplay = document.getElementById('profile-avatar-display');
+      if (avatarDisplay) {
+        avatarDisplay.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover" alt="avatar" />`;
+      }
+
+      // Disable upload button
+      const uploadBtn = document.getElementById('avatar-upload-btn');
+      if (uploadBtn) uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
+
+      google.script.run
+        .withSuccessHandler(function (resp) {
+          if (uploadBtn) uploadBtn.innerHTML = '<i class="fas fa-camera text-xs"></i>';
+          input.value = '';
+          if (resp.success) {
+            currentUser.avatar = resp.avatarUrl;
+            updateUIForUser(currentUser);
+            showToast('Ảnh đại diện đã được cập nhật!', 'success');
+          } else {
+            showToast(resp.error || 'Lỗi khi tải ảnh lên', 'error');
+          }
+        })
+        .withFailureHandler(function (err) {
+          if (uploadBtn) uploadBtn.innerHTML = '<i class="fas fa-camera text-xs"></i>';
+          input.value = '';
+          showToast('Lỗi kết nối: ' + err.message, 'error');
+        })
+        .uploadAvatar(base64, mimeType, filename, currentToken);
+    };
+    reader.readAsDataURL(file);
   }
 
   // ============================================================

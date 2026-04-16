@@ -49,6 +49,11 @@ const STAFF_EMAIL_COLUMN_NAME = 'Email';
 const STAFF_POSITION_COLUMN_NAME = 'Chức vụ';
 const STAFF_ROLE_COLUMN_NAME = 'Phân quyền';
 const STAFF_PASSWORD_COLUMN_NAME = 'Mật khẩu';
+const STAFF_PHONE_COLUMN_NAME = 'Điện thoại';
+const STAFF_BIRTHDAY_COLUMN_NAME = 'Ngày sinh';
+const STAFF_DEPARTMENT_COLUMN_NAME = 'Phòng ban';
+const STAFF_BIO_COLUMN_NAME = 'Giới thiệu';
+const STAFF_AVATAR_COLUMN_NAME = 'Avatar';
 
 // === Cột sheet "Nhật ký hoạt động" ===
 const LOG_TIMESTAMP_COLUMN_NAME = 'Thời gian';
@@ -98,7 +103,7 @@ function getInitialDataFast() {
     // Batch get tất cả sheets cùng lúc
     const ranges = [
       `'${PROJECT_SHEET_NAME}'!A:I`, // Projects với tất cả columns
-      `'${STAFF_SHEET_NAME}'!A:F`, // Staff
+      `'${STAFF_SHEET_NAME}'!A:Z`, // Staff (all columns including extended profile)
     ];
 
     const response = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
@@ -209,12 +214,22 @@ function authenticateUser(email, password) {
       const userPassword = String(row[passwordColIndex] || '').trim();
 
       if (userEmail === email.toLowerCase() && userPassword === password) {
+        const phoneIdx = headers.indexOf(STAFF_PHONE_COLUMN_NAME);
+        const birthdayIdx = headers.indexOf(STAFF_BIRTHDAY_COLUMN_NAME);
+        const deptIdx = headers.indexOf(STAFF_DEPARTMENT_COLUMN_NAME);
+        const bioIdx = headers.indexOf(STAFF_BIO_COLUMN_NAME);
+        const avatarIdx = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
         const userData = {
           id: row[idColIndex] || '',
           name: row[nameColIndex] || '',
           email: row[emailColIndex] || '',
           role: row[roleColIndex] || 'Nhân viên',
           position: row[headers.indexOf(STAFF_POSITION_COLUMN_NAME)] || '',
+          phone: phoneIdx >= 0 ? (row[phoneIdx] || '') : '',
+          birthday: birthdayIdx >= 0 ? (row[birthdayIdx] || '') : '',
+          department: deptIdx >= 0 ? (row[deptIdx] || '') : '',
+          bio: bioIdx >= 0 ? (row[bioIdx] || '') : '',
+          avatar: avatarIdx >= 0 ? (row[avatarIdx] || '') : '',
         };
 
         // Store session
@@ -2554,14 +2569,15 @@ function formatChatJSON(messages) {
   return '[\n' + formattedMessages.join(',\n') + '\n]';
 }
 
-function updateProfile(newName, newPosition, token) {
+function updateProfile(profileData, token) {
   try {
     const currentUser = getCurrentUser(token);
     if (!currentUser) {
       return { success: false, error: 'Chưa đăng nhập' };
     }
 
-    if (!newName || !newName.trim()) {
+    const newName = (profileData.name || '').trim();
+    if (!newName) {
       return { success: false, error: 'Họ tên không được để trống' };
     }
 
@@ -2573,19 +2589,56 @@ function updateProfile(newName, newPosition, token) {
 
     const headers = getHeaders(staffSheet);
     const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
-    const nameColIndex = headers.indexOf(STAFF_NAME_COLUMN_NAME);
-    const positionColIndex = headers.indexOf(STAFF_POSITION_COLUMN_NAME);
+
+    // Ensure extended columns exist
+    const colMap = {};
+    const colNames = [
+      STAFF_NAME_COLUMN_NAME, STAFF_POSITION_COLUMN_NAME,
+      STAFF_PHONE_COLUMN_NAME, STAFF_BIRTHDAY_COLUMN_NAME,
+      STAFF_DEPARTMENT_COLUMN_NAME, STAFF_BIO_COLUMN_NAME,
+    ];
+    colNames.forEach(function(name) {
+      let idx = headers.indexOf(name);
+      if (idx === -1) {
+        idx = headers.length;
+        staffSheet.getRange(1, idx + 1).setValue(name);
+        headers.push(name);
+      }
+      colMap[name] = idx;
+    });
 
     const lastRow = staffSheet.getLastRow();
     for (let row = 2; row <= lastRow; row++) {
       const userEmail = staffSheet.getRange(row, emailColIndex + 1).getValue();
       if (userEmail === currentUser.email) {
-        staffSheet.getRange(row, nameColIndex + 1).setValue(newName.trim());
-        if (positionColIndex >= 0) {
-          staffSheet.getRange(row, positionColIndex + 1).setValue((newPosition || '').trim());
-        }
+        staffSheet.getRange(row, colMap[STAFF_NAME_COLUMN_NAME] + 1).setValue(newName);
+        staffSheet.getRange(row, colMap[STAFF_POSITION_COLUMN_NAME] + 1).setValue((profileData.position || '').trim());
+        staffSheet.getRange(row, colMap[STAFF_PHONE_COLUMN_NAME] + 1).setValue((profileData.phone || '').trim());
+        staffSheet.getRange(row, colMap[STAFF_BIRTHDAY_COLUMN_NAME] + 1).setValue((profileData.birthday || '').trim());
+        staffSheet.getRange(row, colMap[STAFF_DEPARTMENT_COLUMN_NAME] + 1).setValue((profileData.department || '').trim());
+        staffSheet.getRange(row, colMap[STAFF_BIO_COLUMN_NAME] + 1).setValue((profileData.bio || '').trim());
         SpreadsheetApp.flush();
-        return { success: true, message: 'Cập nhật hồ sơ thành công', name: newName.trim(), position: (newPosition || '').trim() };
+
+        // Update session data
+        const updatedUser = Object.assign({}, currentUser, {
+          name: newName,
+          position: (profileData.position || '').trim(),
+          phone: (profileData.phone || '').trim(),
+          birthday: (profileData.birthday || '').trim(),
+          department: (profileData.department || '').trim(),
+          bio: (profileData.bio || '').trim(),
+        });
+        PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(updatedUser));
+
+        return {
+          success: true, message: 'Cập nhật hồ sơ thành công',
+          name: newName,
+          position: updatedUser.position,
+          phone: updatedUser.phone,
+          birthday: updatedUser.birthday,
+          department: updatedUser.department,
+          bio: updatedUser.bio,
+        };
       }
     }
 
@@ -2593,6 +2646,60 @@ function updateProfile(newName, newPosition, token) {
   } catch (e) {
     console.error('Error updating profile:', e);
     return { success: false, error: 'Lỗi hệ thống: ' + e.message };
+  }
+}
+
+function uploadAvatar(base64Data, mimeType, filename, token) {
+  try {
+    const currentUser = getCurrentUser(token);
+    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+
+    if (!base64Data || base64Data.length > 3800000) {
+      return { success: false, error: 'Ảnh quá lớn (tối đa ~2.8MB)' };
+    }
+
+    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename || 'avatar.jpg');
+
+    // Find or create QLDA_Avatars folder
+    let folder;
+    const folders = DriveApp.getFoldersByName('QLDA_Avatars');
+    folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('QLDA_Avatars');
+
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    const avatarUrl = 'https://drive.google.com/uc?id=' + file.getId();
+
+    // Save URL to Staff sheet
+    const ss = getSpreadsheet();
+    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
+    if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
+
+    const headers = getHeaders(staffSheet);
+    const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
+    let avatarColIndex = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
+    if (avatarColIndex === -1) {
+      avatarColIndex = headers.length;
+      staffSheet.getRange(1, avatarColIndex + 1).setValue(STAFF_AVATAR_COLUMN_NAME);
+      headers.push(STAFF_AVATAR_COLUMN_NAME);
+    }
+
+    const lastRow = staffSheet.getLastRow();
+    for (let row = 2; row <= lastRow; row++) {
+      const userEmail = staffSheet.getRange(row, emailColIndex + 1).getValue();
+      if (userEmail === currentUser.email) {
+        staffSheet.getRange(row, avatarColIndex + 1).setValue(avatarUrl);
+        SpreadsheetApp.flush();
+        // Update session
+        const updatedUser = Object.assign({}, currentUser, { avatar: avatarUrl });
+        PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(updatedUser));
+        return { success: true, avatarUrl: avatarUrl };
+      }
+    }
+
+    return { success: false, error: 'Không tìm thấy tài khoản' };
+  } catch (e) {
+    console.error('uploadAvatar error:', e);
+    return { success: false, error: e.message };
   }
 }
 
