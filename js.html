@@ -5812,18 +5812,18 @@
         }
       })
       .withFailureHandler(function () {})
-      .getUserProfileData();
+      .getUserProfileData(currentUser ? currentUser.email : '');
   }
 
   /**
    * Hiển thị modal chỉnh sửa hồ sơ (avatar, bio, phone)
    */
   function showProfileEditModal() {
-    if (!isAuthenticated) { showToast('Vui lòng đăng nhập', 'error'); return; }
+    if (!isAuthenticated || !currentUser) { showToast('Vui lòng đăng nhập', 'error'); return; }
 
     google.script.run
       .withSuccessHandler(function (data) {
-        // Nếu lỗi, vẫn mở modal với dữ liệu mặc định (chứ không đóng modal)
+        // Nếu lỗi, vẫn mở modal với dữ liệu mặc định
         if (!data.success) {
           data = { success: true, avatar: '', bio: '', phone: '', totalPoints: 0,
             level: { emoji: '🥉', label: 'Đồng', color: '#cd7f32', progress: 0, nextMin: 200 } };
@@ -5907,10 +5907,7 @@
         );
       })
       .withFailureHandler(function (err) { showToast('Lỗi: ' + err.message, 'error'); })
-      .getUserProfileData();
-  }
-
-  // base64 của avatar mới đang được chọn
+      .getUserProfileData(currentUser ? currentUser.email : '');
   let _pendingAvatarBase64 = null;
 
   function onAvatarFileSelected(event) {
@@ -5947,7 +5944,7 @@
   function saveUserProfile() {
     const phone = (document.getElementById('profile-phone')?.value || '').trim();
     const bio   = (document.getElementById('profile-bio')?.value   || '').trim();
-    const profileData = { phone, bio };
+    const profileData = { phone, bio, email: currentUser ? currentUser.email : '' };
     if (_pendingAvatarBase64) profileData.avatar = _pendingAvatarBase64;
 
     const btn = document.querySelector('#profile-modal button[onclick="saveUserProfile()"]');

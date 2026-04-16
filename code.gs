@@ -2844,10 +2844,15 @@ const TG_DATE_COL = 'Ngày đăng ký';
 /**
  * Lấy dữ liệu hồ sơ đầy đủ của người dùng hiện tại (avatar, bio, phone, level)
  */
-function getUserProfileData() {
+function getUserProfileData(callerEmail) {
   try {
-    const currentUser = getCurrentUser();
-    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+    // callerEmail is passed from client (more reliable than server-side session)
+    let email = callerEmail;
+    if (!email) {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+      email = currentUser.email;
+    }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
@@ -2863,7 +2868,7 @@ function getUserProfileData() {
     const values = staffSheet.getRange(2, 1, Math.max(1, staffSheet.getLastRow() - 1), staffSheet.getLastColumn()).getValues();
 
     for (const row of values) {
-      if (String(row[emailColIndex] || '').toLowerCase() !== currentUser.email.toLowerCase()) continue;
+      if (String(row[emailColIndex] || '').toLowerCase() !== email.toLowerCase()) continue;
 
       const staffId = String(row[idColIndex] || '');
       let totalPoints = 0;
@@ -2899,8 +2904,13 @@ function getUserProfileData() {
  */
 function updateUserProfile(profileData) {
   try {
-    const currentUser = getCurrentUser();
-    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+    // profileData.email is passed from client
+    let email = profileData.email;
+    if (!email) {
+      const currentUser = getCurrentUser();
+      if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+      email = currentUser.email;
+    }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
@@ -2925,7 +2935,7 @@ function updateUserProfile(profileData) {
     const values = staffSheet.getRange(2, 1, Math.max(1, staffSheet.getLastRow() - 1), headers.length).getValues();
 
     for (let i = 0; i < values.length; i++) {
-      if (String(values[i][emailColIndex] || '').toLowerCase() !== currentUser.email.toLowerCase()) continue;
+      if (String(values[i][emailColIndex] || '').toLowerCase() !== email.toLowerCase()) continue;
 
       const rowNum = i + 2;
       if (profileData.avatar !== undefined && avatarColIndex >= 0)
