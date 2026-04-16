@@ -46,10 +46,35 @@ class SheetsDB:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    # Headers for auto-created sheets
+    _SHEET_HEADERS: dict[str, list[str]] = {}  # populated after config import
+
     def _ws(self, name: str) -> gspread.Worksheet:
         if name not in self._ws_cache:
-            self._ws_cache[name] = self._ss.worksheet(name)
+            try:
+                self._ws_cache[name] = self._ss.worksheet(name)
+            except gspread.exceptions.WorksheetNotFound:
+                logger.info("Sheet '%s' not found, creating it...", name)
+                ws = self._ss.add_worksheet(title=name, rows=1000, cols=20)
+                headers = self._get_default_headers(name)
+                if headers:
+                    ws.append_row(headers)
+                self._ws_cache[name] = ws
         return self._ws_cache[name]
+
+    def _get_default_headers(self, name: str) -> list[str]:
+        from config import (
+            SHEET_TELEGRAM_USERS, SHEET_ACHIEVEMENTS,
+            COL_TG_ID, COL_TG_STAFF, COL_TG_NAME, COL_TG_DATE,
+            COL_ACH_ID, COL_ACH_STAFF, COL_ACH_TYPE, COL_ACH_TITLE,
+            COL_ACH_POINTS, COL_ACH_DATE, COL_ACH_DESC,
+        )
+        if name == SHEET_TELEGRAM_USERS:
+            return [COL_TG_ID, COL_TG_STAFF, COL_TG_NAME, COL_TG_DATE]
+        if name == SHEET_ACHIEVEMENTS:
+            return [COL_ACH_ID, COL_ACH_STAFF, COL_ACH_TYPE, COL_ACH_TITLE,
+                    COL_ACH_POINTS, COL_ACH_DATE, COL_ACH_DESC]
+        return []
 
     @classmethod
     def get(cls) -> SheetsDB:
