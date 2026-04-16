@@ -293,7 +293,7 @@ async def handle_link_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await _do_link_by_id(update, action.upper())
 
 
-
+def register(app) -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu",  cmd_menu))
     app.add_handler(CommandHandler("help",  cmd_help))
