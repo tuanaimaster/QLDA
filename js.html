@@ -3638,15 +3638,16 @@
     allProjects.forEach((project) => {
       const projectStartDate = new Date(project[COL.P_START]);
       const projectEndDate = new Date(project[COL.P_END]);
+      const hasValidDates = !isNaN(projectStartDate.getTime()) && !isNaN(projectEndDate.getTime());
+      const lastDayOfMonth = new Date(currentGanttDate.getFullYear(), currentGanttDate.getMonth() + 1, 0);
 
-      // Kiểm tra xem dự án có hiển thị trong tháng hiện tại không
-      if (
+      // Show project if: has no dates (always show), dates overlap current month, or spans entire month
+      const shouldShow = !hasValidDates ||
         isDateInMonth(projectStartDate, currentGanttDate) ||
         isDateInMonth(projectEndDate, currentGanttDate) ||
-        (projectStartDate < firstDay &&
-          projectEndDate >
-            new Date(currentGanttDate.getFullYear(), currentGanttDate.getMonth() + 1, 0))
-      ) {
+        (projectStartDate < firstDay && projectEndDate > lastDayOfMonth);
+
+      if (shouldShow) {
         // === RENDER PROJECT ===
         const projectGanttBarStyle = calculateGanttBarStyle(
           projectStartDate,
