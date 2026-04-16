@@ -257,6 +257,9 @@
       userRole.textContent = user.role;
     }
 
+    // Load avatar & level badge asynchronously
+    loadUserProfileBadge();
+
     // THAY ĐỔI: Kiểm tra xem nhân viên có phải là người phụ trách dự án nào không
     const isProjectManager = allProjects.some((project) => project[COL.P_MANAGER] === user.name);
 
@@ -5619,6 +5622,12 @@
             loadLeaderboard('leaderboard-overview');
           }
 
+          // Level-up celebration
+          if (result.levelUp) {
+            showLevelUpCelebration(result.levelUp);
+            loadUserProfileBadge(); // refresh badge in sidebar
+          }
+
           // Re-render locally (instant, no server call)
           loadKanbanData();
         } else {
@@ -5764,6 +5773,226 @@
         </div>
       `).join('');
     }
+  }
+
+  // ============================================================
+  // == HỒ SƠ NGƯỜI DÙNG ==
+  // ============================================================
+
+  /**
+   * Load avatar + level badge từ server và cập nhật sidebar
+   */
+  function loadUserProfileBadge() {
+    if (!isAuthenticated) return;
+    google.script.run
+      .withSuccessHandler(function (data) {
+        if (!data.success) return;
+        const avatarEl  = document.getElementById('user-avatar');
+        const badgeEl   = document.getElementById('user-level-badge');
+        const levelText = document.getElementById('user-level-text');
+
+        if (avatarEl) {
+          if (data.avatar) {
+            avatarEl.innerHTML = `<img src="${data.avatar}" class="w-full h-full object-cover rounded-full" alt="avatar">`;
+          }
+          // else keep initials
+        }
+        if (data.level && badgeEl) {
+          badgeEl.textContent = data.level.emoji;
+          badgeEl.classList.remove('hidden');
+        }
+        if (data.level && levelText) {
+          levelText.textContent = `${data.level.emoji} ${data.level.label} • ${data.totalPoints} điểm`;
+          levelText.style.color = data.level.color || '#6b7280';
+          levelText.classList.remove('hidden');
+        }
+      })
+      .withFailureHandler(function () {})
+      .getUserProfileData();
+  }
+
+  /**
+   * Hiển thị modal chỉnh sửa hồ sơ (avatar, bio, phone)
+   */
+  function showProfileEditModal() {
+    if (!isAuthenticated) { showToast('Vui lòng đăng nhập', 'error'); return; }
+
+    google.script.run
+      .withSuccessHandler(function (data) {
+        if (!data.success) { showToast(data.error || 'Lỗi tải hồ sơ', 'error'); return; }
+
+        const lv = data.level || { emoji: '🥉', label: 'Đồng', color: '#cd7f32', progress: 0, nextMin: 200 };
+
+        const html = `
+          <div id="profile-modal" class="modal active">
+            <div class="modal-content max-w-lg">
+              <div class="flex items-center justify-between mb-5">
+                <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <i class="fas fa-user-circle text-purple-500"></i> Hồ sơ của tôi
+                </h3>
+                <button class="close-modal text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button>
+              </div>
+
+              <!-- Avatar upload -->
+              <div class="flex flex-col items-center mb-5">
+                <div class="relative">
+                  <div id="profile-avatar-preview"
+                    class="w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold overflow-hidden cursor-pointer hover:opacity-80 transition-opacity border-4 border-white shadow-lg"
+                    onclick="document.getElementById('avatar-file-input').click()"
+                    title="Nhấn để đổi ảnh">
+                    ${data.avatar
+                      ? `<img src="${data.avatar}" class="w-full h-full object-cover">`
+                      : escapeHtml(currentUser ? currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?')}
+                  </div>
+                  <span id="profile-level-badge-lg" class="absolute -bottom-1 -right-1 text-2xl leading-none">${lv.emoji}</span>
+                  <button onclick="document.getElementById('avatar-file-input').click()"
+                    class="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs px-2 py-0.5 rounded-full hover:bg-purple-700 whitespace-nowrap">
+                    <i class="fas fa-camera mr-1"></i>Đổi ảnh
+                  </button>
+                </div>
+                <input type="file" id="avatar-file-input" accept="image/*" class="hidden" onchange="onAvatarFileSelected(event)">
+                <p class="text-xs text-gray-400 mt-6">Nhấn vào ảnh để thay đổi (tối đa 200KB)</p>
+              </div>
+
+              <!-- Level bar -->
+              <div class="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                <div class="flex justify-between items-center mb-1.5">
+                  <span class="text-sm font-semibold" style="color:${lv.color}">${lv.emoji} Cấp ${lv.label}</span>
+                  <span class="text-xs text-amber-600 font-semibold">${data.totalPoints} điểm</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                  <div class="h-2 rounded-full" style="width:${lv.progress}%;background:${lv.color}"></div>
+                </div>
+                ${lv.nextMin ? `<p class="text-xs text-gray-400 mt-1">Cần thêm ${lv.nextMin - data.totalPoints} điểm để lên cấp</p>` : '<p class="text-xs text-amber-600 mt-1">👑 Cấp cao nhất!</p>'}
+              </div>
+
+              <!-- Profile fields -->
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-phone mr-1"></i>Số điện thoại</label>
+                  <input id="profile-phone" type="tel" value="${escapeHtml(data.phone || '')}"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-300 focus:border-purple-400 outline-none"
+                    placeholder="VD: 0901 234 567">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-info-circle mr-1"></i>Giới thiệu bản thân</label>
+                  <textarea id="profile-bio" rows="3"
+                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-300 focus:border-purple-400 outline-none resize-none"
+                    placeholder="VD: Senior Dev tại Công ty ABC...">${escapeHtml(data.bio || '')}</textarea>
+                </div>
+              </div>
+
+              <div class="flex gap-2 mt-5">
+                <button onclick="saveUserProfile()" class="flex-1 px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-colors">
+                  <i class="fas fa-save mr-2"></i>Lưu hồ sơ
+                </button>
+                <button class="close-modal px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                  Huỷ
+                </button>
+              </div>
+            </div>
+          </div>`;
+
+        document.getElementById('modals-container').insertAdjacentHTML('beforeend', html);
+        document.getElementById('profile-modal').querySelectorAll('.close-modal').forEach(btn =>
+          btn.addEventListener('click', () => document.getElementById('profile-modal')?.remove())
+        );
+      })
+      .withFailureHandler(function (err) { showToast('Lỗi: ' + err.message, 'error'); })
+      .getUserProfileData();
+  }
+
+  // base64 của avatar mới đang được chọn
+  let _pendingAvatarBase64 = null;
+
+  function onAvatarFileSelected(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) { showToast('Ảnh quá lớn! Vui lòng chọn ảnh dưới 500KB.', 'error'); return; }
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      // Resize to max 200x200 using canvas
+      const img = new Image();
+      img.onload = function () {
+        const canvas = document.createElement('canvas');
+        const MAX = 200;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          const ratio = Math.min(MAX / width, MAX / height);
+          width  = Math.round(width  * ratio);
+          height = Math.round(height * ratio);
+        }
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.82);
+        _pendingAvatarBase64 = base64;
+        const preview = document.getElementById('profile-avatar-preview');
+        if (preview) preview.innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function saveUserProfile() {
+    const phone = (document.getElementById('profile-phone')?.value || '').trim();
+    const bio   = (document.getElementById('profile-bio')?.value   || '').trim();
+    const profileData = { phone, bio };
+    if (_pendingAvatarBase64) profileData.avatar = _pendingAvatarBase64;
+
+    const btn = document.querySelector('#profile-modal button[onclick="saveUserProfile()"]');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang lưu...'; }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res.success) {
+          showToast('Hồ sơ đã được cập nhật!', 'success');
+          document.getElementById('profile-modal')?.remove();
+          _pendingAvatarBase64 = null;
+          loadUserProfileBadge();
+        } else {
+          showToast(res.error || 'Lỗi lưu hồ sơ', 'error');
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu hồ sơ'; }
+        }
+      })
+      .withFailureHandler(function (err) {
+        showToast('Lỗi: ' + err.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu hồ sơ'; }
+      })
+      .updateUserProfile(profileData);
+  }
+
+  /**
+   * Hiển thị animation ăn mừng lên cấp
+   */
+  function showLevelUpCelebration(levelInfo) {
+    // Remove existing if any
+    document.getElementById('level-up-overlay')?.remove();
+
+    const html = `
+      <div id="level-up-overlay" class="level-up-overlay" onclick="this.remove()">
+        <div class="level-up-card" onclick="event.stopPropagation()">
+          <div class="level-up-confetti" aria-hidden="true">
+            ${Array.from({length: 20}, () => '<span></span>').join('')}
+          </div>
+          <div class="level-up-emoji">${levelInfo.emoji}</div>
+          <h2 class="level-up-title">LÊN CẤP!</h2>
+          <p class="level-up-sub">Chúc mừng bạn đạt cấp độ mới</p>
+          <div class="level-up-badge" style="background:${levelInfo.color || '#6366f1'}">
+            ${levelInfo.emoji} ${levelInfo.label}
+          </div>
+          <p class="level-up-pts">⭐ ${levelInfo.totalPoints} điểm</p>
+          <button class="level-up-close" onclick="document.getElementById('level-up-overlay').remove()">
+            Tiếp tục <i class="fas fa-arrow-right ml-1"></i>
+          </button>
+        </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    // Auto-close after 8s
+    setTimeout(() => document.getElementById('level-up-overlay')?.remove(), 8000);
   }
 
   function showMyAchievementsModal() {

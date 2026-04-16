@@ -3139,6 +3139,81 @@
     background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%) !important;
   }
 
+  /* ── Profile avatar badge ───────────────────────────────────────────────── */
+  #user-level-badge {
+    font-size: 14px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    filter: drop-shadow(0 0 3px rgba(0,0,0,0.15));
+  }
+
+  /* ── Level-up celebration overlay ──────────────────────────────────────── */
+  .level-up-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.65);
+    display: flex; align-items: center; justify-content: center;
+    animation: lvl-fade-in 0.3s ease;
+  }
+  @keyframes lvl-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  .level-up-card {
+    position: relative;
+    background: #fff;
+    border-radius: 24px;
+    padding: 40px 48px;
+    text-align: center;
+    max-width: 360px; width: 90%;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+    animation: lvl-card-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes lvl-card-in { from { transform: scale(0.5) translateY(40px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+
+  .level-up-emoji {
+    font-size: 72px; line-height: 1.1;
+    animation: lvl-bounce 0.8s 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes lvl-bounce { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .level-up-title {
+    font-size: 28px; font-weight: 900; color: #1f2937;
+    margin: 8px 0 4px; letter-spacing: 1px;
+  }
+  .level-up-sub { font-size: 14px; color: #6b7280; margin-bottom: 16px; }
+  .level-up-badge {
+    display: inline-block; color: #fff;
+    font-size: 18px; font-weight: 700;
+    padding: 8px 24px; border-radius: 999px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+  }
+  .level-up-pts { font-size: 15px; color: #f59e0b; font-weight: 700; margin-bottom: 24px; }
+  .level-up-close {
+    display: inline-flex; align-items: center;
+    background: #6366f1; color: #fff;
+    border: none; border-radius: 12px;
+    padding: 10px 28px; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .level-up-close:hover { background: #4f46e5; }
+
+  /* Confetti particles */
+  .level-up-confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .level-up-confetti span {
+    position: absolute; top: -10px;
+    width: 8px; height: 12px; border-radius: 2px;
+    animation: confetti-fall 2s 0.5s ease-in both;
+  }
+  .level-up-confetti span:nth-child(odd)  { background: #f59e0b; }
+  .level-up-confetti span:nth-child(even) { background: #6366f1; }
+  .level-up-confetti span:nth-child(3n)   { background: #ef4444; width: 6px; height: 6px; border-radius: 50%; }
+  .level-up-confetti span:nth-child(4n)   { background: #10b981; }
+  ${Array.from({length:20},(_,i) => `.level-up-confetti span:nth-child(${i+1}){left:${(i*5+3)}%;animation-delay:${(i*0.08).toFixed(2)}s;animation-duration:${(1.5+i*0.07).toFixed(2)}s}`).join('')}
+  @keyframes confetti-fall {
+    0%   { transform: translateY(-10px) rotate(0); opacity: 1; }
+    100% { transform: translateY(400px) rotate(540deg); opacity: 0; }
+  }
+
   .kanban-card-progress {
     margin-top: 8px;
     padding-left: 8px;

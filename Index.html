@@ -56,27 +56,44 @@
             <div
               class="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-100"
             >
-              <div
-                id="user-avatar"
-                class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-              ></div>
+              <!-- Avatar with level medal badge -->
+              <div class="relative flex-shrink-0">
+                <div
+                  id="user-avatar"
+                  class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold overflow-hidden cursor-pointer hover:ring-2 hover:ring-purple-400 transition-all"
+                  onclick="showProfileEditModal()"
+                  title="Chỉnh sửa hồ sơ"
+                ></div>
+                <span
+                  id="user-level-badge"
+                  class="absolute -bottom-1 -right-1 hidden text-base leading-none select-none pointer-events-none"
+                ></span>
+              </div>
               <div class="flex-1 min-w-0">
                 <p id="user-name" class="text-sm font-medium text-gray-900 truncate"></p>
                 <p id="user-role" class="text-xs text-gray-600"></p>
+                <p id="user-level-text" class="text-xs font-semibold hidden"></p>
               </div>
             </div>
-            <div class="flex gap-2 mt-2">
+            <div class="flex gap-1.5 mt-2">
+              <button
+                id="profile-btn"
+                onclick="showProfileEditModal()"
+                class="flex-1 px-2 py-1 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors duration-200"
+              >
+                <i class="fas fa-user-edit mr-1"></i>Hồ sơ
+              </button>
               <button
                 id="change-password-btn"
                 class="flex-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200"
               >
-                <i class="fas fa-key mr-2"></i>Đổi mật khẩu
+                <i class="fas fa-key mr-1"></i>Mật khẩu
               </button>
               <button
                 id="logout-btn"
-                class="flex-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 hover:text-white rounded-lg transition-colors duration-200"
+                class="flex-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors duration-200"
               >
-                <i class="fas fa-sign-out-alt mr-2"></i>Đăng xuất
+                <i class="fas fa-sign-out-alt mr-1"></i>Thoát
               </button>
             </div>
           </div>

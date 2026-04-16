@@ -41,6 +41,20 @@ const STAFF_EMAIL_COLUMN_NAME = 'Email';
 const STAFF_POSITION_COLUMN_NAME = 'Chức vụ';
 const STAFF_ROLE_COLUMN_NAME = 'Phân quyền';
 const STAFF_PASSWORD_COLUMN_NAME = 'Mật khẩu';
+const STAFF_AVATAR_COLUMN_NAME = 'Ảnh đại diện';
+const STAFF_BIO_COLUMN_NAME = 'Giới thiệu';
+const STAFF_PHONE_COLUMN_NAME = 'Điện thoại';
+
+// === Cột sheet thông báo lên cấp ===
+const LEVEL_UP_NOTIF_SHEET_NAME = 'Cấp Độ Mới';
+const LU_STAFF_COL  = 'Mã NV';
+const LU_NAME_COL   = 'Tên';
+const LU_TG_COL     = 'Telegram ID';
+const LU_LEVEL_COL  = 'Cấp độ mới';
+const LU_EMOJI_COL  = 'Emoji';
+const LU_POINTS_COL = 'Điểm';
+const LU_TIME_COL   = 'Thời gian';
+const LU_SENT_COL   = 'Đã gửi';
 
 // === Cột sheet "Nhật ký hoạt động" ===
 const LOG_TIMESTAMP_COLUMN_NAME = 'Thời gian';
@@ -2771,11 +2785,24 @@ function updateTaskStatus(taskId, newStatus) {
 
         // Kiểm tra thành tích khi hoàn thành
         let achievements = [];
+        let levelUp = null;
         if (newStatus === 'Hoàn thành' && oldStatus !== 'Hoàn thành') {
-          achievements = checkAndAwardAchievements(task[TASK_ASSIGNEE_COLUMN_NAME], taskId, task);
+          const assigneeName = task[TASK_ASSIGNEE_COLUMN_NAME];
+          const pointsBefore = getTotalPointsForStaff_(assigneeName);
+          const levelBefore  = getLevelInfo(pointsBefore);
+
+          achievements = checkAndAwardAchievements(assigneeName, taskId, task);
+
+          const pointsAfter = getTotalPointsForStaff_(assigneeName);
+          const levelAfter  = getLevelInfo(pointsAfter);
+
+          if (levelAfter.label !== levelBefore.label) {
+            levelUp = levelAfter;
+            writeLevelUpNotification_(assigneeName, levelAfter, pointsAfter);
+          }
         }
 
-        return { success: true, achievements: achievements };
+        return { success: true, achievements: achievements, levelUp: levelUp };
       } catch (e) {
         continue;
       }
@@ -2809,6 +2836,173 @@ const TG_ID_COL = 'Telegram ID';
 const TG_STAFF_COL = 'Mã NV';
 const TG_NAME_COL = 'Tên hiển thị';
 const TG_DATE_COL = 'Ngày đăng ký';
+
+// ==================================
+// == HỒ SƠ NGƯỜI DÙNG ==
+// ==================================
+
+/**
+ * Lấy dữ liệu hồ sơ đầy đủ của người dùng hiện tại (avatar, bio, phone, level)
+ */
+function getUserProfileData() {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
+    if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
+
+    const headers = staffSheet.getRange(1, 1, 1, staffSheet.getLastColumn()).getValues()[0];
+    const emailColIndex   = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
+    const idColIndex      = headers.indexOf(STAFF_ID_COLUMN_NAME);
+    const avatarColIndex  = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
+    const bioColIndex     = headers.indexOf(STAFF_BIO_COLUMN_NAME);
+    const phoneColIndex   = headers.indexOf(STAFF_PHONE_COLUMN_NAME);
+
+    const values = staffSheet.getRange(2, 1, Math.max(1, staffSheet.getLastRow() - 1), staffSheet.getLastColumn()).getValues();
+
+    for (const row of values) {
+      if (String(row[emailColIndex] || '').toLowerCase() !== currentUser.email.toLowerCase()) continue;
+
+      const staffId = String(row[idColIndex] || '');
+      let totalPoints = 0;
+      let level = getLevelInfo(0);
+
+      const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
+      if (achSheet && achSheet.getLastRow() >= 2) {
+        const allAch = sheetDataToObjectArray(achSheet);
+        totalPoints = allAch
+          .filter(a => a[ACH_STAFF_COL] === staffId)
+          .reduce((s, a) => s + (parseInt(a[ACH_POINTS_COL], 10) || 0), 0);
+        level = getLevelInfo(totalPoints);
+      }
+
+      return {
+        success: true,
+        avatar:  avatarColIndex  >= 0 ? (row[avatarColIndex]  || '') : '',
+        bio:     bioColIndex     >= 0 ? (row[bioColIndex]     || '') : '',
+        phone:   phoneColIndex   >= 0 ? (row[phoneColIndex]   || '') : '',
+        totalPoints,
+        level,
+      };
+    }
+    return { success: false, error: 'Không tìm thấy hồ sơ' };
+  } catch (e) {
+    console.error('Error in getUserProfileData:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Cập nhật hồ sơ người dùng hiện tại (avatar base64, bio, phone)
+ */
+function updateUserProfile(profileData) {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
+    if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
+
+    const headers = staffSheet.getRange(1, 1, 1, staffSheet.getLastColumn()).getValues()[0];
+    const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
+
+    // Tự tạo cột nếu chưa có
+    [STAFF_AVATAR_COLUMN_NAME, STAFF_BIO_COLUMN_NAME, STAFF_PHONE_COLUMN_NAME].forEach(col => {
+      if (!headers.includes(col)) {
+        const newColIdx = staffSheet.getLastColumn() + 1;
+        staffSheet.getRange(1, newColIdx).setValue(col);
+        headers.push(col);
+      }
+    });
+
+    const avatarColIndex = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
+    const bioColIndex    = headers.indexOf(STAFF_BIO_COLUMN_NAME);
+    const phoneColIndex  = headers.indexOf(STAFF_PHONE_COLUMN_NAME);
+
+    const values = staffSheet.getRange(2, 1, Math.max(1, staffSheet.getLastRow() - 1), headers.length).getValues();
+
+    for (let i = 0; i < values.length; i++) {
+      if (String(values[i][emailColIndex] || '').toLowerCase() !== currentUser.email.toLowerCase()) continue;
+
+      const rowNum = i + 2;
+      if (profileData.avatar !== undefined && avatarColIndex >= 0)
+        staffSheet.getRange(rowNum, avatarColIndex + 1).setValue(profileData.avatar);
+      if (profileData.bio !== undefined && bioColIndex >= 0)
+        staffSheet.getRange(rowNum, bioColIndex + 1).setValue(profileData.bio);
+      if (profileData.phone !== undefined && phoneColIndex >= 0)
+        staffSheet.getRange(rowNum, phoneColIndex + 1).setValue(profileData.phone);
+
+      SpreadsheetApp.flush();
+      return { success: true };
+    }
+    return { success: false, error: 'Không tìm thấy người dùng' };
+  } catch (e) {
+    console.error('Error in updateUserProfile:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Tổng điểm của nhân viên theo tên (helper nội bộ)
+ * @private
+ */
+function getTotalPointsForStaff_(staffName) {
+  try {
+    const achSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ACHIEVEMENT_SHEET_NAME);
+    if (!achSheet || achSheet.getLastRow() < 2) return 0;
+    const staff = getStaffList();
+    const member = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
+    if (!member) return 0;
+    const staffId = member[STAFF_ID_COLUMN_NAME];
+    return sheetDataToObjectArray(achSheet)
+      .filter(a => a[ACH_STAFF_COL] === staffId)
+      .reduce((s, a) => s + (parseInt(a[ACH_POINTS_COL], 10) || 0), 0);
+  } catch (e) { return 0; }
+}
+
+/**
+ * Ghi thông báo lên cấp để bot Telegram gửi (helper nội bộ)
+ * @private
+ */
+function writeLevelUpNotification_(staffName, levelInfo, totalPoints) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet(ss, LEVEL_UP_NOTIF_SHEET_NAME, [
+      LU_STAFF_COL, LU_NAME_COL, LU_TG_COL,
+      LU_LEVEL_COL, LU_EMOJI_COL, LU_POINTS_COL, LU_TIME_COL, LU_SENT_COL,
+    ]);
+
+    // Tìm Telegram ID từ sheet Telegram Users
+    let tgId = '';
+    const tgSheet = ss.getSheetByName(TELEGRAM_USERS_SHEET_NAME);
+    if (tgSheet && tgSheet.getLastRow() >= 2) {
+      const staff = getStaffList();
+      const member = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
+      if (member) {
+        const staffId = member[STAFF_ID_COLUMN_NAME];
+        const tgData  = sheetDataToObjectArray(tgSheet);
+        const tgRow   = tgData.find(r => r[TG_STAFF_COL] === staffId);
+        if (tgRow) tgId = tgRow[TG_ID_COL];
+      }
+    }
+
+    const staffList = getStaffList();
+    const m = staffList.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
+    const staffId = m ? m[STAFF_ID_COLUMN_NAME] : '';
+
+    sheet.appendRow([
+      staffId, staffName, tgId,
+      levelInfo.label, levelInfo.emoji, totalPoints,
+      new Date(), 'FALSE',
+    ]);
+    SpreadsheetApp.flush();
+  } catch (e) {
+    console.error('writeLevelUpNotification_ error:', e);
+  }
+}
 
 /**
  * ══════════════════════════════════════════════════════════════
