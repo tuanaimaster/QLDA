@@ -10,8 +10,8 @@
   let currentSection = 'overview';
   let currentUser = null; // Store current logged in user
   let isAuthenticated = false;
-  let draggedItem = null;
   let currentToken = localStorage.getItem('qlda_tok') || null;
+  let draggedItem = null;
   let draggedProjectId = null;
   let currentStatListData = [];
 
@@ -91,18 +91,15 @@
         showToast('Lỗi kết nối: ' + error.message, 'error');
         showLoginModal();
       })
-        .getInitialDataWithAuth(currentToken);
+      .getInitialDataWithAuth(currentToken);
   }
 
   function showLoginModal() {
     const loginModal = document.getElementById('login-modal');
     if (loginModal) {
-      const modalCard = loginModal.querySelector('.bg-white\/90') || loginModal.firstElementChild;
       loginModal.classList.remove('opacity-0', 'invisible');
-      if (modalCard) {
-        modalCard.classList.remove('scale-95');
-        modalCard.classList.add('scale-100');
-      }
+      const card = loginModal.querySelector('.bg-white\\/90') || loginModal.firstElementChild;
+      if (card) { card.classList.remove('scale-95'); card.classList.add('scale-100'); }
 
       // Focus on email input
       setTimeout(() => {
@@ -114,11 +111,8 @@
   function hideLoginModal() {
     const loginModal = document.getElementById('login-modal');
     if (loginModal) {
-      const modalCard = loginModal.querySelector('.bg-white\/90') || loginModal.firstElementChild;
-      if (modalCard) {
-        modalCard.classList.remove('scale-100');
-        modalCard.classList.add('scale-95');
-      }
+      const card = loginModal.querySelector('.bg-white\\/90') || loginModal.firstElementChild;
+      if (card) { card.classList.remove('scale-100'); card.classList.add('scale-95'); }
 
       setTimeout(() => {
         loginModal.classList.add('opacity-0', 'invisible');
@@ -145,8 +139,6 @@
         if (response.success) {
           hideLoginModal();
           hideLoginError();
-
-          // authenticateUser đã trả về toàn bộ data trong 1 lần gọi
           handleSuccessfulLogin(response);
           showToast('Đăng nhập thành công!', 'success');
         } else {
@@ -162,62 +154,46 @@
   }
 
   function handleSuccessfulLogin(dataResponse) {
-    try {
-      currentUser = dataResponse.user;
-      isAuthenticated = true;
-
-      // Lưu token để dùng cho mọi server call sau này
-      if (dataResponse.token) {
-        currentToken = dataResponse.token;
-        localStorage.setItem('qlda_tok', currentToken);
-      }
-
-      allProjects = dataResponse.projects || [];
-      allTasks = dataResponse.tasks || [];
-      allStaff = dataResponse.staff || [];
-
-      // Render dữ liệu cốt lõi trước để tránh trang bị treo khi một module phụ lỗi
-      renderStats(dataResponse.summaryStats);
-      renderProjects();
-      renderTasks();
-      renderStaff();
-      renderTaskStats();
-      renderProjectStats();
-
-      // Các phần phụ tách try/catch để không chặn phần cốt lõi
-      try { updateUIForUser(currentUser); } catch (e) { console.error('updateUIForUser error:', e); }
-      try { renderChart(dataResponse.chartData); } catch (e) { console.error('renderChart error:', e); }
-      try { renderProjectProgressChart(); } catch (e) { console.error('renderProjectProgressChart error:', e); }
-      try { renderTaskPriorityChart(); } catch (e) { console.error('renderTaskPriorityChart error:', e); }
-      try { renderTimelineProgressChart(); } catch (e) { console.error('renderTimelineProgressChart error:', e); }
-      try { renderProjectComparisonChart(); } catch (e) { console.error('renderProjectComparisonChart error:', e); }
-      try { renderStaffPerformanceChart(); } catch (e) { console.error('renderStaffPerformanceChart error:', e); }
-      try { renderActivity(dataResponse.recentActivities || []); } catch (e) { console.error('renderActivity error:', e); }
-      try { renderPriorityTasksMini(); } catch (e) { console.error('renderPriorityTasksMini error:', e); }
-
-      setupGanttEventListeners();
-      if (currentSection === 'gantt') {
-        try { renderGanttChart(); } catch (e) { console.error('renderGanttChart error:', e); }
-      }
-
-      // Load leaderboard in Overview
-      try { loadLeaderboard('leaderboard-overview'); } catch (e) { console.error('loadLeaderboard error:', e); }
-
-      // Hook achievements button (may render after login)
-      setTimeout(() => {
-        document.getElementById('view-my-achievements-btn')?.addEventListener('click', showMyAchievementsModal);
-      }, 200);
-
-      // ← THÊM: Load chat async sau 500ms để UI render xong trước
-      setTimeout(() => {
-        if (currentSection === 'overview') {
-          loadChatMessagesAsync();
-        }
-      }, 500);
-    } catch (e) {
-      console.error('handleSuccessfulLogin fatal error:', e);
-      showToast('Đã đăng nhập nhưng lỗi khi hiển thị dữ liệu. Vui lòng tải lại trang.', 'error');
+    currentUser = dataResponse.user;
+    isAuthenticated = true;
+    if (dataResponse.token) {
+      currentToken = dataResponse.token;
+      localStorage.setItem('qlda_tok', currentToken);
     }
+
+    allProjects = dataResponse.projects || [];
+    allTasks = dataResponse.tasks || [];
+    allStaff = dataResponse.staff || [];
+
+    updateUIForUser(currentUser);
+
+    // Render UI ngay lập tức
+    renderStats(dataResponse.summaryStats);
+    renderProjects();
+    renderTasks();
+    renderStaff();
+    renderChart(dataResponse.chartData);
+    renderProjectProgressChart();
+    renderTaskPriorityChart();
+    renderTimelineProgressChart();
+    renderProjectComparisonChart();
+    renderStaffPerformanceChart();
+    renderActivity(dataResponse.recentActivities);
+    renderPriorityTasksMini();
+    renderTaskStats();
+    renderProjectStats();
+
+    setupGanttEventListeners();
+    if (currentSection === 'gantt') {
+      renderGanttChart();
+    }
+
+    // ← THÊM: Load chat async sau 500ms để UI render xong trước
+    setTimeout(() => {
+      if (currentSection === 'overview') {
+        loadChatMessagesAsync();
+      }
+    }, 500);
   }
 
   function loadChatMessagesAsync() {
@@ -264,13 +240,6 @@
       userName.textContent = user.name;
       userRole.textContent = user.role;
     }
-
-    // Load avatar & level badge asynchronously
-    loadUserProfileBadge();
-
-    // Show header profile button
-    const headerProfileBtn = document.getElementById('header-profile-btn');
-    if (headerProfileBtn) headerProfileBtn.classList.remove('hidden');
 
     // THAY ĐỔI: Kiểm tra xem nhân viên có phải là người phụ trách dự án nào không
     const isProjectManager = allProjects.some((project) => project[COL.P_MANAGER] === user.name);
@@ -432,6 +401,9 @@
 
   function handleLogout() {
     if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
+      const tokenToLogout = currentToken;
+      currentToken = null;
+      localStorage.removeItem('qlda_tok');
       // showLoading('Đang đăng xuất...');
 
       google.script.run
@@ -456,16 +428,12 @@
           showLoginModal();
 
           showToast('Đăng xuất thành công', 'success');
-
-          // Xóa token
-          currentToken = null;
-          localStorage.removeItem('qlda_tok');
         })
         .withFailureHandler(function (error) {
           // hideLoading();
           showToast('Lỗi khi đăng xuất: ' + error.message, 'error');
         })
-        .logout(currentToken);
+        .logout(tokenToLogout);
     }
   }
 
@@ -540,7 +508,7 @@
           setButtonLoading(submitBtn, false);
           showToast('Lỗi: ' + error.message, 'error');
         })
-          .changePassword(newPassword, confirmPassword, currentToken);
+        .changePassword(newPassword, confirmPassword, currentToken);
     });
 
     // Setup close handlers
@@ -628,8 +596,6 @@
         projects: 'Quản lý Dự án',
         tasks: 'Quản lý Nhiệm vụ',
         staff: 'Quản lý Nhân viên',
-        gantt: 'Sơ đồ Gantt',
-        kanban: 'Kanban Board',
       };
 
       const baseTitle = sectionTitles[currentSection] || 'Dashboard';
@@ -678,9 +644,6 @@
     document
       .getElementById('change-password-btn')
       ?.addEventListener('click', showChangePasswordModal);
-
-    // Achievements button
-    document.getElementById('view-my-achievements-btn')?.addEventListener('click', showMyAchievementsModal);
 
     // Mobile menu
     document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
@@ -1256,15 +1219,9 @@
       projects: 'Quản lý Dự án',
       tasks: 'Quản lý Nhiệm vụ',
       staff: 'Quản lý Nhân viên',
-      gantt: 'Sơ đồ Gantt',
-      kanban: 'Kanban Board',
+      gantt: 'Sơ đồ Gantt', // Thêm tiêu đề cho tab Gantt
     };
     document.getElementById('page-title').textContent = titles[sectionName] || 'Dashboard';
-
-    // Teardown kanban smart refresh when leaving kanban
-    if (currentSection === 'kanban' && sectionName !== 'kanban') {
-      teardownKanbanSmartRefresh();
-    }
 
     // Show/hide sections
     document.querySelectorAll('.section').forEach((section) => {
@@ -1276,21 +1233,11 @@
 
     // Nếu chuyển sang tab Gantt, render biểu đồ
     if (sectionName === 'gantt') {
+      // Thêm timeout để đảm bảo DOM được cập nhật trước khi thiết lập event listeners
       setTimeout(() => {
         renderGanttChart();
+        // setupGanttEventListeners() đã được gọi trong renderGanttChart() nên không cần gọi lại ở đây
       }, 10);
-    }
-
-    // Nếu chuyển sang tab Kanban
-    if (sectionName === 'kanban') {
-      setTimeout(() => {
-        initKanban();
-      }, 50);
-    }
-
-    // Nếu chuyển sang Overview, load leaderboard
-    if (sectionName === 'overview') {
-      loadLeaderboard('leaderboard-overview');
     }
 
     // Close mobile menu if open
@@ -2908,7 +2855,7 @@
         setButtonLoading(submitBtn, false);
         showToast('Lỗi: ' + error.message, 'error');
       })
-          [apiMethod](data, currentToken);
+      [apiMethod](data, currentToken);
   }
 
   function handleEdit(type, originalData) {
@@ -3004,7 +2951,7 @@
         updateOptimisticUpdate(type, id, originalData);
         showToast('Lỗi: ' + error.message, 'error');
       })
-          [apiMethod](id, data, currentToken);
+      [apiMethod](id, data, currentToken);
   }
 
   function confirmDelete(type, id, name) {
@@ -3043,7 +2990,7 @@
           if (deleteBtn) setButtonLoading(deleteBtn, false);
           showToast('Lỗi: ' + error.message, 'error');
         })
-          [apiMethod](id, currentToken);
+        [apiMethod](id, currentToken);
     }
   }
 
@@ -3065,7 +3012,7 @@
         // hideLoading();
         showToast('Lỗi khi tải dữ liệu: ' + error.message, 'error');
       })
-        .getDataForUser(currentToken);
+      .getDataForUser(currentToken);
   }
 
   // === Button Loading State Management ===
@@ -4846,7 +4793,7 @@
         sendBtn.disabled = false;
         input.disabled = false;
       })
-        .sendChatMessage(message, currentToken);
+      .sendChatMessage(message, currentToken);
   }
 
   function handleQuickCompleteTask(e) {
@@ -4924,7 +4871,7 @@
                 checkbox.disabled = false;
                 showToast('Lỗi kết nối: ' + error.message, 'error');
               })
-                .updateTaskWithAuth(taskId, updateData, currentToken);
+              .updateTaskWithAuth(taskId, updateData, currentToken);
           }
         },
         function () {
@@ -5421,695 +5368,4 @@
       })
       .join('');
   }
-
-  // ============================================================
-  // == KANBAN BOARD ==
-  // ============================================================
-
-  let kanbanSortableInstances = [];
-  let kanbanLastRefreshTime = 0;
-  let kanbanRefreshTimer = null;
-  let kanbanIdleTimer = null;
-  const KANBAN_IDLE_REFRESH_MS = 15 * 60 * 1000; // 15 phút
-  const KANBAN_CLICK_DEBOUNCE_MS = 2000;          // 2 giây debounce
-
-  function initKanban() {
-    // Load SortableJS nếu chưa có
-    if (typeof Sortable === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js';
-      script.onload = function () {
-        populateKanbanFilters();
-        loadKanbanData();
-        setupKanbanSmartRefresh();
-      };
-      document.head.appendChild(script);
-    } else {
-      populateKanbanFilters();
-      loadKanbanData();
-      setupKanbanSmartRefresh();
-    }
-  }
-
-  function populateKanbanFilters() {
-    const projectSelect = document.getElementById('kanban-project-filter');
-    const assigneeSelect = document.getElementById('kanban-assignee-filter');
-    if (!projectSelect || !assigneeSelect) return;
-
-    // Populate projects
-    const projectOptions = allProjects.map(p =>
-      `<option value="${p[COL.P_ID]}">${p[COL.P_NAME] || p[COL.P_ID]}</option>`
-    ).join('');
-    projectSelect.innerHTML = '<option value="">Tất cả dự án</option>' + projectOptions;
-
-    // Populate assignees (unique from allTasks)
-    const assignees = [...new Set(allTasks.map(t => t[COL.T_ASSIGNEE]).filter(Boolean))].sort();
-    const assigneeOptions = assignees.map(a => `<option value="${a}">${a}</option>`).join('');
-    assigneeSelect.innerHTML = '<option value="">Tất cả người thực hiện</option>' + assigneeOptions;
-
-    // Attach filter listeners
-    projectSelect.onchange = () => loadKanbanData();
-    assigneeSelect.onchange = () => loadKanbanData();
-  }
-
-  function loadKanbanData() {
-    if (!isAuthenticated) return;
-    const projectFilter = document.getElementById('kanban-project-filter')?.value || '';
-    const assigneeFilter = document.getElementById('kanban-assignee-filter')?.value || '';
-
-    // ⚡ Client-side instant render (no server round-trip)
-    const now = new Date(); now.setHours(0, 0, 0, 0);
-
-    let tasks = allTasks;
-    if (projectFilter)  tasks = tasks.filter(t => t[COL.T_PID] === projectFilter);
-    if (assigneeFilter) tasks = tasks.filter(t => t[COL.T_ASSIGNEE] === assigneeFilter);
-
-    const projectMap = {};
-    allProjects.forEach(p => { projectMap[p[COL.P_ID]] = p[COL.P_NAME] || p[COL.P_ID]; });
-
-    const enriched = tasks.map(t => ({
-      ...t,
-      _projectName: projectMap[t[COL.T_PID]] || t[COL.T_PID] || '',
-      _isOverdue: t[COL.T_DUE] && new Date(t[COL.T_DUE]) < now && t[COL.T_STATUS] !== 'Hoàn thành',
-    }));
-
-    // ─── New 4-column grouping ────────────────────────────────────────────
-    // Col 0: "Nhiệm vụ"          ← status "Chưa bắt đầu" (not overdue)
-    // Col 1: "Đang thực hiện"    ← status "Đang thực hiện" (not overdue)
-    // Col 2: "Tạm dừng|Quá hạn" ← status "Tạm dừng" + any overdue task
-    // Col 3: "Hoàn thành"        ← status "Hoàn thành"
-    const grouped = {
-      'Nhiệm vụ':          [],
-      'Đang thực hiện':    [],
-      'Tạm dừng|Quá hạn': [],
-      'Hoàn thành':        [],
-    };
-
-    enriched.forEach(t => {
-      const status = t[COL.T_STATUS] || 'Chưa bắt đầu';
-      if (status === 'Hoàn thành') {
-        grouped['Hoàn thành'].push(t);
-      } else if (t._isOverdue || status === 'Tạm dừng') {
-        grouped['Tạm dừng|Quá hạn'].push(t);
-      } else if (status === 'Đang thực hiện') {
-        grouped['Đang thực hiện'].push(t);
-      } else {
-        grouped['Nhiệm vụ'].push(t);
-      }
-    });
-
-    renderKanbanBoard({ success: true, grouped });
-    kanbanLastRefreshTime = Date.now();
-    updateKanbanLastUpdated();
-  }
-
-  function renderKanbanBoard(data) {
-    const colIds     = ['kanban-col-0', 'kanban-col-1', 'kanban-col-2', 'kanban-col-3'];
-    const colKeys    = ['Nhiệm vụ', 'Đang thực hiện', 'Tạm dừng|Quá hạn', 'Hoàn thành'];
-    // data-status on sortable lists → maps to the actual status stored on drag
-    const dropStatus = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
-    const countIds   = ['kanban-count-0', 'kanban-count-1', 'kanban-count-2', 'kanban-count-3'];
-
-    // Destroy old sortable instances
-    kanbanSortableInstances.forEach(s => s.destroy && s.destroy());
-    kanbanSortableInstances = [];
-
-    colKeys.forEach((key, i) => {
-      const colEl   = document.getElementById(colIds[i]);
-      const countEl = document.getElementById(countIds[i]);
-      const tasks   = (data.grouped && data.grouped[key]) ? data.grouped[key] : [];
-
-      if (countEl) countEl.textContent = tasks.length;
-      if (!colEl) return;
-
-      if (tasks.length === 0) {
-        colEl.innerHTML = '<div class="kanban-empty-state">Không có nhiệm vụ</div>';
-      } else {
-        colEl.innerHTML = tasks.map(t => buildKanbanCard(t)).join('');
-      }
-
-      // Update data-status so drag-drop sends correct status to server
-      colEl.dataset.status = dropStatus[i];
-
-      // Init SortableJS
-      if (typeof Sortable !== 'undefined') {
-        const instance = Sortable.create(colEl, {
-          group: 'kanban-tasks',
-          animation: 150,
-          ghostClass: 'sortable-ghost',
-          chosenClass: 'sortable-chosen',
-          dragClass: 'kanban-drag',
-          onEnd: function (evt) {
-            const taskId   = evt.item.dataset.taskId;
-            const newStatus = evt.to.dataset.status;
-            const oldStatus = evt.from.dataset.status;
-            if (taskId && newStatus && newStatus !== oldStatus) {
-              handleKanbanDrop(taskId, newStatus, evt.item);
-            }
-          },
-        });
-        kanbanSortableInstances.push(instance);
-      }
-    });
-
-    // Load leaderboard in kanban section
-    loadLeaderboard('leaderboard-list');
-  }
-
-  function buildKanbanCard(task) {
-    const priority = (task[COL.T_PRIORITY] || '').toLowerCase();
-    const priorityClass = priority.includes('cao') ? 'priority-cao'
-      : priority.includes('thấp') ? 'priority-thap'
-      : priority.includes('trung') ? 'priority-trung'
-      : 'priority-none';
-
-    const dueDate = task[COL.T_DUE] || '';
-    const isOverdue = task._isOverdue;
-    const dueBadge = dueDate
-      ? `<span class="kanban-badge kanban-badge-due ${isOverdue ? 'overdue' : ''}">
-           <i class="fas fa-calendar-alt"></i> ${formatDisplayDate(dueDate)}
-           ${isOverdue ? ' <span class="kanban-overdue-tag">Quá hạn</span>' : ''}
-         </span>`
-      : '';
-
-    const completion = parseInt(task[COL.T_COMPLETION] || 0, 10);
-    const assignee = task[COL.T_ASSIGNEE] || '';
-    const projectName = task._projectName || task[COL.T_PID] || '';
-
-    return `
-      <div class="kanban-card ${priorityClass} ${isOverdue ? 'kanban-card-overdue' : ''}"
-           data-task-id="${task[COL.T_ID]}"
-           data-status="${task[COL.T_STATUS] || ''}"
-           title="${(task[COL.T_NAME] || '').replace(/"/g, '&quot;')}">
-        <div class="kanban-card-title">${escapeHtml(task[COL.T_NAME] || '')}</div>
-        <div class="kanban-card-meta">
-          ${projectName ? `<span class="kanban-badge kanban-badge-project"><i class="fas fa-folder"></i> ${escapeHtml(projectName)}</span>` : ''}
-          ${assignee ? `<span class="kanban-badge kanban-badge-assignee"><i class="fas fa-user"></i> ${escapeHtml(assignee)}</span>` : ''}
-          ${dueBadge}
-        </div>
-        ${completion > 0 ? `
-          <div class="kanban-card-progress">
-            <div class="kanban-progress-bar">
-              <div class="kanban-progress-fill ${isOverdue ? 'bg-red-400' : ''}" style="width:${completion}%"></div>
-            </div>
-          </div>
-        ` : ''}
-      </div>`;
-  }
-
-  function handleKanbanDrop(taskId, newStatus, cardEl) {
-    cardEl.style.opacity = '0.5';
-
-    google.script.run
-      .withSuccessHandler(function (result) {
-        cardEl.style.opacity = '1';
-        if (result.success) {
-          // Update local cache immediately
-          const t = allTasks.find(t => t[COL.T_ID] === taskId);
-          if (t) t[COL.T_STATUS] = newStatus;
-
-          showToast(`Đã chuyển sang "${newStatus}"`, 'success');
-
-          if (result.achievements && result.achievements.length > 0) {
-            result.achievements.forEach(ach => {
-              showToast(`🏆 ${ach.title} (+${ach.points} điểm)`, 'success');
-            });
-            loadLeaderboard('leaderboard-list');
-            loadLeaderboard('leaderboard-overview');
-          }
-
-          // Level-up celebration
-          if (result.levelUp) {
-            showLevelUpCelebration(result.levelUp);
-            loadUserProfileBadge(); // refresh badge in sidebar
-          }
-
-          // Re-render locally (instant, no server call)
-          loadKanbanData();
-        } else {
-          showToast(result.error || 'Lỗi cập nhật trạng thái', 'error');
-          loadKanbanData();
-        }
-      })
-      .withFailureHandler(function (err) {
-        cardEl.style.opacity = '1';
-        showToast('Lỗi kết nối: ' + err.message, 'error');
-        loadKanbanData();
-      })
-        .updateTaskStatus(taskId, newStatus, currentToken);
-  }
-
-  // Mở modal thêm nhiệm vụ từ Kanban board, pre-chọn trạng thái cột
-  function openKanbanAddTask(displayStatus) {
-    if (!isAuthenticated) { showToast('Vui lòng đăng nhập', 'error'); return; }
-    if (!canUserCreateTask()) { showToast('Bạn không có quyền tạo nhiệm vụ', 'error'); return; }
-    // Map display name → actual status value stored in sheet
-    const statusMap = {
-      'Nhiệm vụ':          'Chưa bắt đầu',
-      'Tạm dừng|Quá hạn':  'Tạm dừng',
-      'Đang thực hiện':    'Đang thực hiện',
-      'Hoàn thành':        'Hoàn thành',
-    };
-    const actualStatus = statusMap[displayStatus] || displayStatus;
-    openModal('task');
-    setTimeout(function () {
-      const statusSelect = document.querySelector('#task-modal select[name="status"]');
-      if (statusSelect) statusSelect.value = actualStatus;
-    }, 80);
-  }
-
-  function refreshKanbanDataQuiet() {
-    // Refresh allTasks in background without showing spinner
-    google.script.run
-      .withSuccessHandler(function (response) {
-        if (response.success) {
-          allTasks = response.tasks || allTasks;
-          allProjects = response.projects || allProjects;
-        }
-      })
-      .withFailureHandler(function() {})
-      .getDataForUser(currentToken);
-  }
-
-  // Smart refresh: on click + 15-min idle
-  function setupKanbanSmartRefresh() {
-    // Click anywhere → debounced refresh
-    document.addEventListener('click', onDocumentClickForKanban);
-    // Start 15-min idle timer
-    resetKanbanIdleTimer();
-  }
-
-  function teardownKanbanSmartRefresh() {
-    document.removeEventListener('click', onDocumentClickForKanban);
-    clearTimeout(kanbanRefreshTimer);
-    clearTimeout(kanbanIdleTimer);
-  }
-
-  function onDocumentClickForKanban() {
-    if (currentSection !== 'kanban') return;
-    // Debounce: don't refresh if already refreshed within 2 seconds
-    clearTimeout(kanbanRefreshTimer);
-    kanbanRefreshTimer = setTimeout(() => {
-      if (Date.now() - kanbanLastRefreshTime > KANBAN_CLICK_DEBOUNCE_MS) {
-        loadKanbanData();
-      }
-    }, KANBAN_CLICK_DEBOUNCE_MS);
-    resetKanbanIdleTimer();
-  }
-
-  function resetKanbanIdleTimer() {
-    clearTimeout(kanbanIdleTimer);
-    kanbanIdleTimer = setTimeout(() => {
-      if (currentSection === 'kanban') {
-        loadKanbanData();
-      }
-      resetKanbanIdleTimer(); // Schedule next check
-    }, KANBAN_IDLE_REFRESH_MS);
-  }
-
-  function showKanbanRefreshIndicator(show) {
-    const el = document.getElementById('kanban-refresh-indicator');
-    if (el) el.classList.toggle('hidden', !show);
-  }
-
-  function updateKanbanLastUpdated() {
-    const el = document.getElementById('kanban-last-updated');
-    if (!el) return;
-    const now = new Date();
-    el.textContent = `Cập nhật: ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-  }
-
-  // ============================================================
-  // == LEADERBOARD & ACHIEVEMENTS ==
-  // ============================================================
-
-  function loadLeaderboard(containerId) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    google.script.run
-      .withSuccessHandler(function (data) {
-        if (data.success) {
-          renderLeaderboard(container, data.leaderboard, containerId === 'leaderboard-overview');
-        }
-      })
-      .withFailureHandler(function() {})
-      .getLeaderboard(5);
-  }
-
-  function renderLeaderboard(container, leaderboard, compact) {
-    if (!leaderboard || leaderboard.length === 0) {
-      container.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">Chưa có dữ liệu thành tích</div>';
-      return;
-    }
-
-    const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-
-    if (compact) {
-      container.innerHTML = leaderboard.map((item, i) => `
-        <div class="leaderboard-item flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-          <span class="text-xl w-8 text-center">${medals[i] || (i + 1)}</span>
-          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            ${getInitials(item.name)}
-          </div>
-          <span class="text-sm font-semibold text-gray-800 flex-1 truncate">${escapeHtml(item.name)}</span>
-          <span class="text-sm font-bold text-amber-500">${item.points} pts</span>
-        </div>
-      `).join('');
-    } else {
-      container.innerHTML = leaderboard.map((item, i) => `
-        <div class="leaderboard-item">
-          <span class="leaderboard-rank">${medals[i] || (i + 1)}</span>
-          <div class="leaderboard-avatar">${getInitials(item.name)}</div>
-          <div class="leaderboard-info">
-            <div class="leaderboard-name">${escapeHtml(item.name)}</div>
-            <div class="leaderboard-badges">${item.badges} thành tích</div>
-          </div>
-          <div class="leaderboard-points">${item.points} pts</div>
-        </div>
-      `).join('');
-    }
-  }
-
-  // ============================================================
-  // == HỒ SƠ NGƯỜI DÙNG ==
-  // ============================================================
-
-  /**
-   * Load avatar + level badge từ server và cập nhật sidebar
-   */
-  function loadUserProfileBadge() {
-    if (!isAuthenticated) return;
-    google.script.run
-      .withSuccessHandler(function (data) {
-        if (!data.success) return;
-        const avatarEl  = document.getElementById('user-avatar');
-        const badgeEl   = document.getElementById('user-level-badge');
-        const levelText = document.getElementById('user-level-text');
-
-        if (avatarEl) {
-          if (data.avatar) {
-            avatarEl.innerHTML = `<img src="${data.avatar}" class="w-full h-full object-cover rounded-full" alt="avatar">`;
-          }
-          // else keep initials
-        }
-        if (data.level && badgeEl) {
-          badgeEl.textContent = data.level.emoji;
-          badgeEl.classList.remove('hidden');
-        }
-        if (data.level && levelText) {
-          levelText.textContent = `${data.level.emoji} ${data.level.label} • ${data.totalPoints} điểm`;
-          levelText.style.color = data.level.color || '#6b7280';
-          levelText.classList.remove('hidden');
-        }
-      })
-      .withFailureHandler(function () {})
-      .getUserProfileData(currentUser ? currentUser.email : '');
-  }
-
-  /**
-   * Hiển thị modal chỉnh sửa hồ sơ (avatar, bio, phone)
-   */
-  function showProfileEditModal() {
-    if (!isAuthenticated || !currentUser) { showToast('Vui lòng đăng nhập', 'error'); return; }
-
-    google.script.run
-      .withSuccessHandler(function (data) {
-        // Nếu lỗi, vẫn mở modal với dữ liệu mặc định
-        if (!data.success) {
-          data = { success: true, avatar: '', bio: '', phone: '', totalPoints: 0,
-            level: { emoji: '🥉', label: 'Đồng', color: '#cd7f32', progress: 0, nextMin: 200 } };
-        }
-
-        const lv = data.level || { emoji: '🥉', label: 'Đồng', color: '#cd7f32', progress: 0, nextMin: 200 };
-
-        const html = `
-          <div id="profile-modal" class="modal active">
-            <div class="modal-content max-w-lg">
-              <div class="flex items-center justify-between mb-5">
-                <h3 class="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <i class="fas fa-user-circle text-purple-500"></i> Hồ sơ của tôi
-                </h3>
-                <button class="close-modal text-gray-400 hover:text-gray-600"><i class="fas fa-times text-lg"></i></button>
-              </div>
-
-              <!-- Avatar upload -->
-              <div class="flex flex-col items-center mb-5">
-                <div class="relative">
-                  <div id="profile-avatar-preview"
-                    class="w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-2xl font-bold overflow-hidden cursor-pointer hover:opacity-80 transition-opacity border-4 border-white shadow-lg"
-                    onclick="document.getElementById('avatar-file-input').click()"
-                    title="Nhấn để đổi ảnh">
-                    ${data.avatar
-                      ? `<img src="${data.avatar}" class="w-full h-full object-cover">`
-                      : escapeHtml(currentUser ? currentUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?')}
-                  </div>
-                  <span id="profile-level-badge-lg" class="absolute -bottom-1 -right-1 text-2xl leading-none">${lv.emoji}</span>
-                  <button onclick="document.getElementById('avatar-file-input').click()"
-                    class="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs px-2 py-0.5 rounded-full hover:bg-purple-700 whitespace-nowrap">
-                    <i class="fas fa-camera mr-1"></i>Đổi ảnh
-                  </button>
-                </div>
-                <input type="file" id="avatar-file-input" accept="image/*" class="hidden" onchange="onAvatarFileSelected(event)">
-                <p class="text-xs text-gray-400 mt-6">Nhấn vào ảnh để thay đổi (tối đa 200KB)</p>
-              </div>
-
-              <!-- Level bar -->
-              <div class="mb-4 p-3 rounded-xl bg-gray-50 border border-gray-100">
-                <div class="flex justify-between items-center mb-1.5">
-                  <span class="text-sm font-semibold" style="color:${lv.color}">${lv.emoji} Cấp ${lv.label}</span>
-                  <span class="text-xs text-amber-600 font-semibold">${data.totalPoints} điểm</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                  <div class="h-2 rounded-full" style="width:${lv.progress}%;background:${lv.color}"></div>
-                </div>
-                ${lv.nextMin ? `<p class="text-xs text-gray-400 mt-1">Cần thêm ${lv.nextMin - data.totalPoints} điểm để lên cấp</p>` : '<p class="text-xs text-amber-600 mt-1">👑 Cấp cao nhất!</p>'}
-              </div>
-
-              <!-- Profile fields -->
-              <div class="space-y-3">
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-phone mr-1"></i>Số điện thoại</label>
-                  <input id="profile-phone" type="tel" value="${escapeHtml(data.phone || '')}"
-                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-300 focus:border-purple-400 outline-none"
-                    placeholder="VD: 0901 234 567">
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1"><i class="fas fa-info-circle mr-1"></i>Giới thiệu bản thân</label>
-                  <textarea id="profile-bio" rows="3"
-                    class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-300 focus:border-purple-400 outline-none resize-none"
-                    placeholder="VD: Senior Dev tại Công ty ABC...">${escapeHtml(data.bio || '')}</textarea>
-                </div>
-              </div>
-
-              <div class="flex gap-2 mt-5">
-                <button onclick="saveUserProfile()" class="flex-1 px-4 py-2 bg-purple-600 text-white text-sm font-semibold rounded-xl hover:bg-purple-700 transition-colors">
-                  <i class="fas fa-save mr-2"></i>Lưu hồ sơ
-                </button>
-                <button class="close-modal px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                  Huỷ
-                </button>
-              </div>
-            </div>
-          </div>`;
-
-        document.getElementById('modals-container').insertAdjacentHTML('beforeend', html);
-        document.getElementById('profile-modal').querySelectorAll('.close-modal').forEach(btn =>
-          btn.addEventListener('click', () => document.getElementById('profile-modal')?.remove())
-        );
-      })
-      .withFailureHandler(function (err) { showToast('Lỗi: ' + err.message, 'error'); })
-      .getUserProfileData(currentUser ? currentUser.email : '');
-  }
-
-  // base64 của avatar mới đang được chọn
-  let _pendingAvatarBase64 = null;
-
-  function onAvatarFileSelected(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    if (file.size > 500 * 1024) { showToast('Ảnh quá lớn! Vui lòng chọn ảnh dưới 500KB.', 'error'); return; }
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      // Resize to max 200x200 using canvas
-      const img = new Image();
-      img.onload = function () {
-        const canvas = document.createElement('canvas');
-        const MAX = 200;
-        let { width, height } = img;
-        if (width > MAX || height > MAX) {
-          const ratio = Math.min(MAX / width, MAX / height);
-          width  = Math.round(width  * ratio);
-          height = Math.round(height * ratio);
-        }
-        canvas.width  = width;
-        canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        const base64 = canvas.toDataURL('image/jpeg', 0.82);
-        _pendingAvatarBase64 = base64;
-        const preview = document.getElementById('profile-avatar-preview');
-        if (preview) preview.innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function saveUserProfile() {
-    const phone = (document.getElementById('profile-phone')?.value || '').trim();
-    const bio   = (document.getElementById('profile-bio')?.value   || '').trim();
-    const profileData = { phone, bio, email: currentUser ? currentUser.email : '' };
-    if (_pendingAvatarBase64) profileData.avatar = _pendingAvatarBase64;
-
-    const btn = document.querySelector('#profile-modal button[onclick="saveUserProfile()"]');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang lưu...'; }
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        if (res.success) {
-          showToast('Hồ sơ đã được cập nhật!', 'success');
-          document.getElementById('profile-modal')?.remove();
-          _pendingAvatarBase64 = null;
-          loadUserProfileBadge();
-        } else {
-          showToast(res.error || 'Lỗi lưu hồ sơ', 'error');
-          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu hồ sơ'; }
-        }
-      })
-      .withFailureHandler(function (err) {
-        showToast('Lỗi: ' + err.message, 'error');
-        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu hồ sơ'; }
-      })
-      .updateUserProfile(profileData);
-  }
-
-  /**
-   * Hiển thị animation ăn mừng lên cấp
-   */
-  function showLevelUpCelebration(levelInfo) {
-    // Remove existing if any
-    document.getElementById('level-up-overlay')?.remove();
-
-    const html = `
-      <div id="level-up-overlay" class="level-up-overlay" onclick="this.remove()">
-        <div class="level-up-card" onclick="event.stopPropagation()">
-          <div class="level-up-confetti" aria-hidden="true">
-            ${Array.from({length: 20}, () => '<span></span>').join('')}
-          </div>
-          <div class="level-up-emoji">${levelInfo.emoji}</div>
-          <h2 class="level-up-title">LÊN CẤP!</h2>
-          <p class="level-up-sub">Chúc mừng bạn đạt cấp độ mới</p>
-          <div class="level-up-badge" style="background:${levelInfo.color || '#6366f1'}">
-            ${levelInfo.emoji} ${levelInfo.label}
-          </div>
-          <p class="level-up-pts">⭐ ${levelInfo.totalPoints} điểm</p>
-          <button class="level-up-close" onclick="document.getElementById('level-up-overlay').remove()">
-            Tiếp tục <i class="fas fa-arrow-right ml-1"></i>
-          </button>
-        </div>
-      </div>`;
-
-    document.body.insertAdjacentHTML('beforeend', html);
-    // Auto-close after 8s
-    setTimeout(() => document.getElementById('level-up-overlay')?.remove(), 8000);
-  }
-
-  function showMyAchievementsModal() {
-    google.script.run
-      .withSuccessHandler(function (data) {
-        if (!data.success) { showToast(data.error || 'Lỗi', 'error'); return; }
-        const achievements = data.achievements || [];
-        const totalPts = data.totalPoints || 0;
-        const lv = data.level || { emoji: '🥉', label: 'Đồng', progress: 0, nextMin: 200 };
-
-        const levelBarHTML = `
-          <div class="mb-5 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-lg font-bold" style="color:${lv.color || '#cd7f32'}">${lv.emoji} Cấp ${lv.label}</span>
-              <span class="text-sm font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">🏆 ${totalPts} điểm</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2.5">
-              <div class="h-2.5 rounded-full transition-all" style="width:${lv.progress}%;background:${lv.color || '#cd7f32'}"></div>
-            </div>
-            ${lv.nextMin ? `<p class="text-xs text-gray-500 mt-1.5">Cần thêm <strong>${lv.nextMin - totalPts}</strong> điểm để lên cấp tiếp theo</p>` : '<p class="text-xs text-amber-600 mt-1.5 font-semibold">🎉 Bạn đã đạt cấp cao nhất!</p>'}
-            <div class="flex gap-2 mt-3 flex-wrap text-xs text-gray-500">
-              <span>🥉 Đồng 0</span><span>→</span>
-              <span>🥈 Bạc 200</span><span>→</span>
-              <span>🥇 Vàng 500</span><span>→</span>
-              <span>💎 Bạch Kim 1500</span><span>→</span>
-              <span>🔮 Kim Cương 3000</span><span>→</span>
-              <span>👑 Huyền Thoại 6000</span>
-            </div>
-          </div>`;
-
-        const modalHTML = `
-          <div id="achievements-modal" class="modal active">
-            <div class="modal-content max-w-2xl">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <i class="fas fa-medal text-amber-500"></i> Thành tích của tôi
-                </h3>
-                <button class="close-modal text-gray-400 hover:text-gray-600">
-                  <i class="fas fa-times text-lg"></i>
-                </button>
-              </div>
-              ${levelBarHTML}
-              ${achievements.length === 0
-                ? '<div class="text-center text-gray-500 py-12"><i class="fas fa-star text-4xl text-gray-300 mb-3 block"></i>Chưa có thành tích nào. Hoàn thành nhiệm vụ để mở khóa!</div>'
-                : `<div class="achievement-grid">${achievements.map(ach => `
-                    <div class="achievement-item">
-                      <div class="achievement-icon">${(ach['Tên thành tích'] || '').split(' ')[0]}</div>
-                      <div class="achievement-title">${escapeHtml((ach['Tên thành tích'] || '').replace(/^[^\s]+\s/, ''))}</div>
-                      <div class="achievement-pts">+${ach['Điểm'] || 0} điểm</div>
-                      <div class="achievement-date">${ach['Ngày đạt'] || ''}</div>
-                    </div>
-                  `).join('')}</div>`
-              }
-              <div class="mt-6 pt-4 border-t border-gray-100">
-                <p class="text-xs text-gray-400 text-center">
-                  <i class="fas fa-info-circle mr-1"></i>
-                  Hoàn thành nhiệm vụ đúng hạn, liên tục để mở khóa thêm thành tích
-                </p>
-              </div>
-            </div>
-          </div>`;
-
-        document.getElementById('modals-container').innerHTML = modalHTML;
-        const modal = document.getElementById('achievements-modal');
-        modal.querySelectorAll('.close-modal').forEach(btn => {
-          btn.addEventListener('click', () => closeModal('achievements-modal'));
-        });
-      })
-      .withFailureHandler(function(err) {
-        showToast('Lỗi: ' + err.message, 'error');
-      })
-        .getMyAchievements(currentToken);
-  }
-
-  // ============================================================
-  // == HELPER UTILS ==
-  // ============================================================
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
-  function getInitials(name) {
-    if (!name) return '?';
-    return name.trim().split(/\s+/).map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  }
-
-  function formatDisplayDate(dateStr) {
-    if (!dateStr) return '';
-    const d = new Date(dateStr + 'T00:00:00');
-    if (isNaN(d.getTime())) return dateStr;
-    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
-  }
-
 </script>

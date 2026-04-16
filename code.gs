@@ -1,5 +1,7 @@
 ﻿// code.gs
 // === CẤU HÌNH CHUNG ===
+
+// === SPREADSHEET CONFIG ===
 const SPREADSHEET_ID = '11xvZ_QYO94o-LUY9aGPQ00Nu0y1ALjKfJr8VW8AIme8';
 
 function getSpreadsheet() {
@@ -47,20 +49,6 @@ const STAFF_EMAIL_COLUMN_NAME = 'Email';
 const STAFF_POSITION_COLUMN_NAME = 'Chức vụ';
 const STAFF_ROLE_COLUMN_NAME = 'Phân quyền';
 const STAFF_PASSWORD_COLUMN_NAME = 'Mật khẩu';
-const STAFF_AVATAR_COLUMN_NAME = 'Ảnh đại diện';
-const STAFF_BIO_COLUMN_NAME = 'Giới thiệu';
-const STAFF_PHONE_COLUMN_NAME = 'Điện thoại';
-
-// === Cột sheet thông báo lên cấp ===
-const LEVEL_UP_NOTIF_SHEET_NAME = 'Cấp Độ Mới';
-const LU_STAFF_COL  = 'Mã NV';
-const LU_NAME_COL   = 'Tên';
-const LU_TG_COL     = 'Telegram ID';
-const LU_LEVEL_COL  = 'Cấp độ mới';
-const LU_EMOJI_COL  = 'Emoji';
-const LU_POINTS_COL = 'Điểm';
-const LU_TIME_COL   = 'Thời gian';
-const LU_SENT_COL   = 'Đã gửi';
 
 // === Cột sheet "Nhật ký hoạt động" ===
 const LOG_TIMESTAMP_COLUMN_NAME = 'Thời gian';
@@ -177,83 +165,6 @@ function parseSheetData(values) {
 }
 
 /**
- * Build full data response for a given user object (no session lookup needed)
- */
-function buildDataResponseForUser(userData) {
-  const data = getInitialDataFast();
-
-  let projects = data.projects || [];
-  let tasks = data.tasks || [];
-  const staff = data.staff || [];
-  let recentActivities = data.recentActivities || [];
-
-  if (!isAdmin(userData)) {
-    if (isManager(userData)) {
-      const managerProjectIds = projects
-        .filter((p) => p[PROJECT_MANAGER_COLUMN_NAME] === userData.name)
-        .map((p) => p[PROJECT_ID_COLUMN_NAME]);
-
-      tasks = tasks.filter((t) => {
-        if (t[TASK_ASSIGNEE_COLUMN_NAME] === userData.name) return true;
-        if (managerProjectIds.includes(t[TASK_PROJECT_ID_COLUMN_NAME])) return true;
-        return false;
-      });
-
-      const taskProjectIds = tasks.map((t) => t[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id);
-      projects = projects.filter(
-        (p) =>
-          p[PROJECT_MANAGER_COLUMN_NAME] === userData.name ||
-          taskProjectIds.includes(p[PROJECT_ID_COLUMN_NAME])
-      );
-    } else {
-      tasks = tasks.filter((t) => {
-        const assignee = String(t[TASK_ASSIGNEE_COLUMN_NAME] || '').trim();
-        if (assignee === userData.name) return true;
-        const project = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === t[TASK_PROJECT_ID_COLUMN_NAME]);
-        return project && project[PROJECT_MANAGER_COLUMN_NAME] === userData.name;
-      });
-
-      const userProjectIds = new Set(tasks.map((t) => t[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id));
-      projects
-        .filter((p) => p[PROJECT_MANAGER_COLUMN_NAME] === userData.name)
-        .forEach((p) => userProjectIds.add(p[PROJECT_ID_COLUMN_NAME]));
-      projects = projects.filter((p) => userProjectIds.has(p[PROJECT_ID_COLUMN_NAME]));
-    }
-
-    recentActivities = recentActivities.filter((a) => {
-      const u = String(a[LOG_USER_COLUMN_NAME] || '').trim();
-      return u === userData.email || u === userData.name;
-    });
-  }
-
-  let filteredStaff = staff;
-  if (!isAdmin(userData)) {
-    if (isManager(userData)) {
-      filteredStaff = staff.filter((s) => !String(s[STAFF_ROLE_COLUMN_NAME] || '').toLowerCase().includes('admin'));
-    } else {
-      const managedProjects = projects.filter((p) => p[PROJECT_MANAGER_COLUMN_NAME] === userData.name);
-      if (managedProjects.length > 0) {
-        filteredStaff = staff.filter((s) => !String(s[STAFF_ROLE_COLUMN_NAME] || '').toLowerCase().includes('admin'));
-      } else {
-        const me = staff.find((s) => s[STAFF_NAME_COLUMN_NAME] === userData.name);
-        filteredStaff = me ? [me] : [];
-      }
-    }
-  }
-
-  return {
-    success: true,
-    user: userData,
-    projects: projects,
-    tasks: tasks,
-    staff: isAdmin(userData) ? staff : filteredStaff,
-    chartData: data.chartData,
-    recentActivities: recentActivities,
-    summaryStats: data.summaryStats,
-  };
-}
-
-/**
  * Authenticate user with email and password
  */
 function authenticateUser(email, password) {
@@ -306,15 +217,24 @@ function authenticateUser(email, password) {
           position: row[headers.indexOf(STAFF_POSITION_COLUMN_NAME)] || '',
         };
 
-        // Store session — returns UUID token
+        // Store session
         const sessionToken = storeUserSession(userData);
 
-        // Trả về toàn bộ data + token trong 1 lần gọi
+        // Return full data in one response to eliminate second server call
         try {
-          const fullData = buildDataResponseForUser(userData);
-          fullData.message = 'Đăng nhập thành công';
-          fullData.token = sessionToken;
-          return fullData;
+          const fullData = getDataForUser(sessionToken);
+          return {
+            success: true,
+            user: userData,
+            token: sessionToken,
+            projects: fullData.projects || [],
+            tasks: fullData.tasks || [],
+            staff: fullData.staff || [],
+            chartData: fullData.chartData || {},
+            recentActivities: fullData.recentActivities || [],
+            summaryStats: fullData.summaryStats || {},
+            message: 'Đăng nhập thành công',
+          };
         } catch (dataErr) {
           console.error('Error loading data after auth:', dataErr);
           return { success: true, user: userData, token: sessionToken, message: 'Đăng nhập thành công' };
@@ -330,17 +250,13 @@ function authenticateUser(email, password) {
 }
 
 /**
- * Store user session — returns a UUID token for client to store
+ * Store user session in PropertiesService
  */
+
 function storeUserSession(userData) {
   try {
     const token = Utilities.getUuid();
-    const sessionData = {
-      ...userData,
-      loginTime: new Date().toISOString(),
-      sessionId: token,
-    };
-    // Key = token UUID — no dependency on getTemporaryActiveUserKey()
+    const sessionData = { ...userData, loginTime: new Date().toISOString(), sessionId: token };
     PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(sessionData));
     return token;
   } catch (e) {
@@ -350,22 +266,18 @@ function storeUserSession(userData) {
 }
 
 /**
- * Get current user by token (client sends token with every call)
+ * Get current user session
  */
 function getCurrentUser(token) {
-  if (!token) return null;
   try {
+    if (!token) return null;
     const sessionString = PropertiesService.getScriptProperties().getProperty('tok_' + token);
     if (!sessionString) return null;
-
     const sessionData = JSON.parse(sessionString);
-
-    // Check 24-hour expiry
     if (new Date() - new Date(sessionData.loginTime) > 24 * 60 * 60 * 1000) {
       PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
       return null;
     }
-
     return sessionData;
   } catch (e) {
     console.error('Error getting current user:', e);
@@ -374,13 +286,11 @@ function getCurrentUser(token) {
 }
 
 /**
- * Logout user — deletes session by token
+ * Logout user
  */
 function logout(token) {
   try {
-    if (token) {
-      PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
-    }
+    if (token) PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
     return { success: true, message: 'Đăng xuất thành công' };
   } catch (e) {
     console.error('Error during logout:', e);
@@ -574,13 +484,9 @@ function addProjectWithAuth(projectData, token) {
     return permissionCheck;
   }
 
-  return addProject(projectData);
+  return addProject(projectData, token);
 }
-
-/**
- * Updated updateProject with permission check
- */
-function updateProjectWithAuth(projectId, projectData, token) {
+function updateProjectWithAuth(projectId, projectData) {
   // LẤY DỮ LIỆU DỰ ÁN GỐC TRƯỚC KHI KIỂM TRA QUYỀN
   const projects = getProjects();
   const originalProject = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === projectId);
@@ -590,7 +496,7 @@ function updateProjectWithAuth(projectId, projectData, token) {
   }
 
   // Kiểm tra quyền dựa trên dự án gốc
-  const permissionCheck = checkUserPermission('update', 'project', originalProject, token);
+  const permissionCheck = checkUserPermission('update', 'project', originalProject);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -601,7 +507,7 @@ function updateProjectWithAuth(projectId, projectData, token) {
 /**
  * Updated deleteProject with permission check
  */
-function deleteProjectWithAuth(projectId, token) {
+function deleteProjectWithAuth(projectId) {
   // LẤY DỮ LIỆU DỰ ÁN GỐC TRƯỚC KHI KIỂM TRA QUYỀN
   const projects = getProjects();
   const originalProject = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === projectId);
@@ -610,7 +516,7 @@ function deleteProjectWithAuth(projectId, token) {
     return { success: false, error: `Không tìm thấy dự án ID: ${projectId}` };
   }
 
-  const permissionCheck = checkUserPermission('delete', 'project', originalProject, token);
+  const permissionCheck = checkUserPermission('delete', 'project', originalProject);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -634,7 +540,6 @@ function addTaskWithAuth(taskData, token) {
  * Updated updateTask with permission check
  */
 function updateTaskWithAuth(taskId, taskData, token) {
-  // Get original task data for permission check
   const tasks = getTasks();
   const originalTask = tasks.find((task) => task[TASK_ID_COLUMN_NAME] === taskId);
 
@@ -650,7 +555,6 @@ function updateTaskWithAuth(taskId, taskData, token) {
  * Updated deleteTask with permission check
  */
 function deleteTaskWithAuth(taskId, token) {
-  // Get original task data for permission check
   const tasks = getTasks();
   const originalTask = tasks.find((task) => task[TASK_ID_COLUMN_NAME] === taskId);
 
@@ -826,7 +730,7 @@ function getInitialDataWithAuth(token) {
 /**
  * Check user permissions for operations
  */
-function checkUserPermission(action, resourceType, resourceData, token) {
+function checkUserPermission(action, resourceType, resourceData = null, token = null) {
   const currentUser = getCurrentUser(token);
 
   if (!currentUser) {
@@ -970,13 +874,13 @@ function getInitialData() {
 // == QUẢN LÝ DỰ ÁN (PROJECTS) ==
 // ==================================
 
-function addProject(projectData) {
+function addProject(projectData, token) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
 
     // Kiểm tra quyền hạn của người dùng về quản lý dự án
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
     if (!isAdmin(currentUser) && isManager(currentUser)) {
       // Nếu người dùng là Quản lý, bắt buộc phải chọn chính họ làm quản lý dự án
       projectData.manager = currentUser.name;
@@ -1997,7 +1901,7 @@ function logActivity(action, details, projectId = null) {
     let user = 'Unknown User';
 
     // Lấy thông tin user
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(null);
     if (currentUser) {
       user = currentUser.email || currentUser.name || 'Unknown User';
     }
@@ -2292,8 +2196,8 @@ function deleteAllTriggers() {
 /**
  * Copy project and all its tasks
  */
-function copyProjectWithAuth(projectId, newProjectName) {
-  const permissionCheck = checkUserPermission('create', 'project');
+function copyProjectWithAuth(projectId, newProjectName, token) {
+  const permissionCheck = checkUserPermission('create', 'project', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -2400,8 +2304,8 @@ function generateTaskIdForProject(projectId, taskIndex) {
 /**
  * Copy task
  */
-function copyTaskWithAuth(taskId, newTaskName) {
-  const permissionCheck = checkUserPermission('create', 'task');
+function copyTaskWithAuth(taskId, newTaskName, token) {
+  const permissionCheck = checkUserPermission('create', 'task', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -2695,800 +2599,6 @@ function changePassword(newPassword, confirmPassword, token) {
     console.error('Error changing password:', e);
     return { success: false, error: 'Lỗi hệ thống: ' + e.message };
   }
-}
-
-// ==================================
-// == KANBAN BOARD ==
-// ==================================
-
-/**
- * Lấy dữ liệu Kanban (tasks grouped by status, kèm tên dự án + assignee)
- */
-function getKanbanData(projectFilter, assigneeFilter, token) {
-  try {
-    const currentUser = getCurrentUser(token);
-    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
-
-    let tasks = [];
-    let projects = [];
-
-    // Dùng getDataForUser để áp dụng phân quyền
-    const data = getDataForUser(token);
-    if (data.success) {
-      tasks = data.tasks || [];
-      projects = data.projects || [];
-    }
-
-    // Filter theo dự án
-    if (projectFilter && projectFilter !== '') {
-      tasks = tasks.filter(t => t[TASK_PROJECT_ID_COLUMN_NAME] === projectFilter);
-    }
-
-    // Filter theo người thực hiện
-    if (assigneeFilter && assigneeFilter !== '') {
-      tasks = tasks.filter(t => t[TASK_ASSIGNEE_COLUMN_NAME] === assigneeFilter);
-    }
-
-    // Tạo map project ID -> project name
-    const projectMap = {};
-    projects.forEach(p => {
-      projectMap[p[PROJECT_ID_COLUMN_NAME]] = p[PROJECT_NAME_COLUMN_NAME] || p[PROJECT_ID_COLUMN_NAME];
-    });
-
-    // Gắn tên dự án vào mỗi task
-    const enrichedTasks = tasks.map(t => ({
-      ...t,
-      _projectName: projectMap[t[TASK_PROJECT_ID_COLUMN_NAME]] || t[TASK_PROJECT_ID_COLUMN_NAME] || '',
-    }));
-
-    // Group by status
-    const columns = ['Chưa bắt đầu', 'Đang thực hiện', 'Hoàn thành', 'Tạm dừng'];
-    const grouped = {};
-    columns.forEach(col => { grouped[col] = []; });
-
-    enrichedTasks.forEach(t => {
-      const status = t[TASK_STATUS_COLUMN_NAME] || 'Chưa bắt đầu';
-      if (grouped[status] !== undefined) {
-        grouped[status].push(t);
-      } else {
-        grouped['Chưa bắt đầu'].push(t);
-      }
-    });
-
-    return {
-      success: true,
-      columns: columns,
-      grouped: grouped,
-      projects: projects.map(p => ({ id: p[PROJECT_ID_COLUMN_NAME], name: p[PROJECT_NAME_COLUMN_NAME] })),
-    };
-  } catch (e) {
-    console.error('Error in getKanbanData:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Cập nhật nhanh trạng thái task (dùng cho kéo thả Kanban)
- */
-function updateTaskStatus(taskId, newStatus, token) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(15000);
-
-    const currentUser = getCurrentUser(token);
-    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
-
-    const allowedStatuses = ['Chưa bắt đầu', 'Đang thực hiện', 'Hoàn thành', 'Tạm dừng'];
-    if (!allowedStatuses.includes(newStatus)) {
-      return { success: false, error: 'Trạng thái không hợp lệ' };
-    }
-
-    const ss = getSpreadsheet();
-    const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
-    if (!projectSheet) return { success: false, error: 'Không tìm thấy dữ liệu' };
-
-    const headers = getHeaders(projectSheet);
-    const jsonColIndex = headers.indexOf(PROJECT_TASKS_JSON_COLUMN_NAME);
-    if (jsonColIndex === -1) return { success: false, error: 'Cấu trúc dữ liệu lỗi' };
-
-    const lastRow = projectSheet.getLastRow();
-    for (let row = 2; row <= lastRow; row++) {
-      const jsonCell = projectSheet.getRange(row, jsonColIndex + 1);
-      const jsonStr = jsonCell.getValue();
-      if (!jsonStr) continue;
-      try {
-        const tasks = JSON.parse(jsonStr);
-        const taskIndex = tasks.findIndex(t => t[TASK_ID_COLUMN_NAME] === taskId);
-        if (taskIndex === -1) continue;
-
-        const task = tasks[taskIndex];
-        const oldStatus = task[TASK_STATUS_COLUMN_NAME];
-
-        // Permission check: chỉ admin/manager/người được giao mới kéo thả được
-        if (!isAdmin(currentUser) && !isManager(currentUser)) {
-          if (task[TASK_ASSIGNEE_COLUMN_NAME] !== currentUser.name) {
-            const projectIdColIndex = headers.indexOf(PROJECT_ID_COLUMN_NAME);
-            const projId = projectSheet.getRange(row, projectIdColIndex + 1).getValue();
-            const projects = getProjects();
-            const proj = projects.find(p => p[PROJECT_ID_COLUMN_NAME] === projId);
-            if (!proj || proj[PROJECT_MANAGER_COLUMN_NAME] !== currentUser.name) {
-              return { success: false, error: 'Bạn không có quyền thay đổi nhiệm vụ này' };
-            }
-          }
-        }
-
-        task[TASK_STATUS_COLUMN_NAME] = newStatus;
-
-        // Nếu chuyển sang Hoàn thành: set ngày hoàn thành, tiến độ 100%
-        if (newStatus === 'Hoàn thành' && oldStatus !== 'Hoàn thành') {
-          task[TASK_REPORT_DATE_COLUMN_NAME] = formatSheetDate(new Date());
-          task[TASK_COMPLETION_COLUMN_NAME] = 100;
-        }
-        // Nếu chuyển từ Hoàn thành sang trạng thái khác: xóa ngày hoàn thành
-        if (oldStatus === 'Hoàn thành' && newStatus !== 'Hoàn thành') {
-          task[TASK_REPORT_DATE_COLUMN_NAME] = '';
-          if (task[TASK_COMPLETION_COLUMN_NAME] === 100) {
-            task[TASK_COMPLETION_COLUMN_NAME] = 80;
-          }
-        }
-
-        tasks[taskIndex] = task;
-        jsonCell.setValue(formatJSONCompact(tasks));
-        SpreadsheetApp.flush();
-
-        // Ghi log
-        const projectIdColIndex = headers.indexOf(PROJECT_ID_COLUMN_NAME);
-        const projId = projectSheet.getRange(row, projectIdColIndex + 1).getValue();
-        logActivity('Cập nhật trạng thái', `ID: ${taskId}, ${oldStatus} → ${newStatus}`, projId);
-
-        // Kiểm tra thành tích khi hoàn thành
-        let achievements = [];
-        let levelUp = null;
-        if (newStatus === 'Hoàn thành' && oldStatus !== 'Hoàn thành') {
-          const assigneeName = task[TASK_ASSIGNEE_COLUMN_NAME];
-          const pointsBefore = getTotalPointsForStaff_(assigneeName);
-          const levelBefore  = getLevelInfo(pointsBefore);
-
-          achievements = checkAndAwardAchievements(assigneeName, taskId, task);
-
-          const pointsAfter = getTotalPointsForStaff_(assigneeName);
-          const levelAfter  = getLevelInfo(pointsAfter);
-
-          if (levelAfter.label !== levelBefore.label) {
-            levelUp = levelAfter;
-            writeLevelUpNotification_(assigneeName, levelAfter, pointsAfter);
-          }
-        }
-
-        return { success: true, achievements: achievements, levelUp: levelUp };
-      } catch (e) {
-        continue;
-      }
-    }
-
-    return { success: false, error: `Không tìm thấy nhiệm vụ ID: ${taskId}` };
-  } catch (e) {
-    console.error('Error in updateTaskStatus:', e);
-    return { success: false, error: e.message };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ==================================
-// == HỆ THỐNG THÀNH TÍCH ==
-// ==================================
-
-const ACHIEVEMENT_SHEET_NAME = 'Thành tích';
-const TELEGRAM_USERS_SHEET_NAME = 'Telegram Users';
-
-const ACH_ID_COL = 'Mã';
-const ACH_STAFF_COL = 'Mã NV';
-const ACH_TYPE_COL = 'Loại';
-const ACH_TITLE_COL = 'Tên thành tích';
-const ACH_POINTS_COL = 'Điểm';
-const ACH_DATE_COL = 'Ngày đạt';
-const ACH_DESC_COL = 'Mô tả';
-
-const TG_ID_COL = 'Telegram ID';
-const TG_STAFF_COL = 'Mã NV';
-const TG_NAME_COL = 'Tên hiển thị';
-const TG_DATE_COL = 'Ngày đăng ký';
-
-// ==================================
-// == HỒ SƠ NGƯỜI DÙNG ==
-// ==================================
-
-/**
- * Lấy dữ liệu hồ sơ đầy đủ của người dùng hiện tại (avatar, bio, phone, level)
- */
-function getUserProfileData(callerEmail) {
-  try {
-    // callerEmail is passed from client (more reliable than server-side session)
-    let email = callerEmail;
-    if (!email) {
-      const currentUser = getCurrentUser();
-      if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
-      email = currentUser.email;
-    }
-
-    const ss = getSpreadsheet();
-    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
-    if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
-
-    const headers = staffSheet.getRange(1, 1, 1, staffSheet.getLastColumn()).getValues()[0];
-    const emailColIndex   = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
-    const idColIndex      = headers.indexOf(STAFF_ID_COLUMN_NAME);
-    const avatarColIndex  = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
-    const bioColIndex     = headers.indexOf(STAFF_BIO_COLUMN_NAME);
-    const phoneColIndex   = headers.indexOf(STAFF_PHONE_COLUMN_NAME);
-
-    const values = staffSheet.getRange(2, 1, Math.max(1, staffSheet.getLastRow() - 1), staffSheet.getLastColumn()).getValues();
-
-    for (const row of values) {
-      if (String(row[emailColIndex] || '').toLowerCase() !== email.toLowerCase()) continue;
-
-      const staffId = String(row[idColIndex] || '');
-      let totalPoints = 0;
-      let level = getLevelInfo(0);
-
-      const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
-      if (achSheet && achSheet.getLastRow() >= 2) {
-        const allAch = sheetDataToObjectArray(achSheet);
-        totalPoints = allAch
-          .filter(a => a[ACH_STAFF_COL] === staffId)
-          .reduce((s, a) => s + (parseInt(a[ACH_POINTS_COL], 10) || 0), 0);
-        level = getLevelInfo(totalPoints);
-      }
-
-      return {
-        success: true,
-        avatar:  avatarColIndex  >= 0 ? (row[avatarColIndex]  || '') : '',
-        bio:     bioColIndex     >= 0 ? (row[bioColIndex]     || '') : '',
-        phone:   phoneColIndex   >= 0 ? (row[phoneColIndex]   || '') : '',
-        totalPoints,
-        level,
-      };
-    }
-    return { success: false, error: 'Không tìm thấy hồ sơ' };
-  } catch (e) {
-    console.error('Error in getUserProfileData:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Cập nhật hồ sơ người dùng hiện tại (avatar base64, bio, phone)
- */
-function updateUserProfile(profileData) {
-  try {
-    // profileData.email is passed from client
-    let email = profileData.email;
-    if (!email) {
-      const currentUser = getCurrentUser();
-      if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
-      email = currentUser.email;
-    }
-
-    const ss = getSpreadsheet();
-    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
-    if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
-
-    const headers = staffSheet.getRange(1, 1, 1, staffSheet.getLastColumn()).getValues()[0];
-    const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
-
-    // Tự tạo cột nếu chưa có
-    [STAFF_AVATAR_COLUMN_NAME, STAFF_BIO_COLUMN_NAME, STAFF_PHONE_COLUMN_NAME].forEach(col => {
-      if (!headers.includes(col)) {
-        const newColIdx = staffSheet.getLastColumn() + 1;
-        staffSheet.getRange(1, newColIdx).setValue(col);
-        headers.push(col);
-      }
-    });
-
-    const avatarColIndex = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
-    const bioColIndex    = headers.indexOf(STAFF_BIO_COLUMN_NAME);
-    const phoneColIndex  = headers.indexOf(STAFF_PHONE_COLUMN_NAME);
-
-    const values = staffSheet.getRange(2, 1, Math.max(1, staffSheet.getLastRow() - 1), headers.length).getValues();
-
-    for (let i = 0; i < values.length; i++) {
-      if (String(values[i][emailColIndex] || '').toLowerCase() !== email.toLowerCase()) continue;
-
-      const rowNum = i + 2;
-      if (profileData.avatar !== undefined && avatarColIndex >= 0)
-        staffSheet.getRange(rowNum, avatarColIndex + 1).setValue(profileData.avatar);
-      if (profileData.bio !== undefined && bioColIndex >= 0)
-        staffSheet.getRange(rowNum, bioColIndex + 1).setValue(profileData.bio);
-      if (profileData.phone !== undefined && phoneColIndex >= 0)
-        staffSheet.getRange(rowNum, phoneColIndex + 1).setValue(profileData.phone);
-
-      SpreadsheetApp.flush();
-      return { success: true };
-    }
-    return { success: false, error: 'Không tìm thấy người dùng' };
-  } catch (e) {
-    console.error('Error in updateUserProfile:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Tổng điểm của nhân viên theo tên (helper nội bộ)
- * @private
- */
-function getTotalPointsForStaff_(staffName) {
-  try {
-    const achSheet = getSpreadsheet().getSheetByName(ACHIEVEMENT_SHEET_NAME);
-    if (!achSheet || achSheet.getLastRow() < 2) return 0;
-    const staff = getStaffList();
-    const member = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
-    if (!member) return 0;
-    const staffId = member[STAFF_ID_COLUMN_NAME];
-    return sheetDataToObjectArray(achSheet)
-      .filter(a => a[ACH_STAFF_COL] === staffId)
-      .reduce((s, a) => s + (parseInt(a[ACH_POINTS_COL], 10) || 0), 0);
-  } catch (e) { return 0; }
-}
-
-/**
- * Ghi thông báo lên cấp để bot Telegram gửi (helper nội bộ)
- * @private
- */
-function writeLevelUpNotification_(staffName, levelInfo, totalPoints) {
-  try {
-    const ss = getSpreadsheet();
-    const sheet = getOrCreateSheet(ss, LEVEL_UP_NOTIF_SHEET_NAME, [
-      LU_STAFF_COL, LU_NAME_COL, LU_TG_COL,
-      LU_LEVEL_COL, LU_EMOJI_COL, LU_POINTS_COL, LU_TIME_COL, LU_SENT_COL,
-    ]);
-
-    // Tìm Telegram ID từ sheet Telegram Users
-    let tgId = '';
-    const tgSheet = ss.getSheetByName(TELEGRAM_USERS_SHEET_NAME);
-    if (tgSheet && tgSheet.getLastRow() >= 2) {
-      const staff = getStaffList();
-      const member = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
-      if (member) {
-        const staffId = member[STAFF_ID_COLUMN_NAME];
-        const tgData  = sheetDataToObjectArray(tgSheet);
-        const tgRow   = tgData.find(r => r[TG_STAFF_COL] === staffId);
-        if (tgRow) tgId = tgRow[TG_ID_COL];
-      }
-    }
-
-    const staffList = getStaffList();
-    const m = staffList.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
-    const staffId = m ? m[STAFF_ID_COLUMN_NAME] : '';
-
-    sheet.appendRow([
-      staffId, staffName, tgId,
-      levelInfo.label, levelInfo.emoji, totalPoints,
-      new Date(), 'FALSE',
-    ]);
-    SpreadsheetApp.flush();
-  } catch (e) {
-    console.error('writeLevelUpNotification_ error:', e);
-  }
-}
-
-/**
- * ══════════════════════════════════════════════════════════════
- *  HỆ THỐNG THÀNH TÍCH & ĐIỂM KINH NGHIỆM (DUOLINGO-INSPIRED)
- * ══════════════════════════════════════════════════════════════
- *
- * CẤP ĐỘ (Level / League):
- *   🥉 Đồng     (Bronze)   :      0 – 199  pts
- *   🥈 Bạc      (Silver)   :    200 – 499  pts
- *   🥇 Vàng     (Gold)     :    500 – 1499 pts
- *   💎 Bạch Kim (Platinum)  :  1500 – 2999 pts
- *   🔮 Kim Cương (Diamond) :  3000 – 5999 pts
- *   👑 Huyền Thoại (Legend):   6000+       pts
- *
- * ĐIỂM NHIỆM VỤ:
- *   +10  hoàn thành 1 nhiệm vụ (được giao cho mình)
- *   +20  nhiệm vụ mình giao cho người khác → họ hoàn thành
- *   +50  hoàn thành nhiệm vụ trước hạn (Early Bird)
- *   +30  hoàn thành nhiệm vụ ưu tiên Cao
- *
- * STREAK (liên tiếp mỗi ngày ≥ 1 task):
- *   +100  streak  3 ngày
- *   +300  streak  7 ngày   (tuần lễ hoàn hảo)
- *   +700  streak  7 ngày   BONUS (tổng 1000 cho tuần)
- *   +2100 streak 21 ngày   BONUS
- *   +500  streak 30 ngày
- *   +1000 streak 60 ngày
- *
- * MILESTONE NHIỆM VỤ:
- *   +50    1 task (first blood)
- *   +100   10 tasks
- *   +300   30 tasks
- *   +500   50 tasks
- *   +1000  100 tasks
- *
- * DỰ ÁN:
- *   +500   là thành viên dự án → dự án hoàn thành
- *   +1000  là PM dự án → dự án hoàn thành
- *
- * THÀNH TÍCH ĐẶC BIỆT (badges):
- *   🏃 Siêu năng suất  : 5 tasks/ngày          +200
- *   📋 Nhà quản lý     : 10 tasks giao→hoàn thành +300
- *   🔄 Không bỏ cuộc  : hoàn thành task quá hạn  +50  (mỗi lần)
- *   ⚡ Tốc độ sét      : hoàn thành trước hạn ≥5 tasks +150
- */
-
-// ── Level definition ──────────────────────────────────────────────────────────
-function getLevelInfo(totalPoints) {
-  const levels = [
-    { min: 0,    max: 199,  label: 'Đồng',       emoji: '🥉', color: '#cd7f32' },
-    { min: 200,  max: 499,  label: 'Bạc',        emoji: '🥈', color: '#9ca3af' },
-    { min: 500,  max: 1499, label: 'Vàng',       emoji: '🥇', color: '#f59e0b' },
-    { min: 1500, max: 2999, label: 'Bạch Kim',   emoji: '💎', color: '#7c3aed' },
-    { min: 3000, max: 5999, label: 'Kim Cương',  emoji: '🔮', color: '#06b6d4' },
-    { min: 6000, max: Infinity, label: 'Huyền Thoại', emoji: '👑', color: '#f97316' },
-  ];
-  const lv = levels.find(l => totalPoints >= l.min && totalPoints <= l.max) || levels[0];
-  const next = levels[levels.indexOf(lv) + 1];
-  const progress = next ? Math.round(((totalPoints - lv.min) / (next.min - lv.min)) * 100) : 100;
-  return { ...lv, totalPoints, nextMin: next ? next.min : null, progress };
-}
-
-/**
- * Kiểm tra và trao thành tích sau khi hoàn thành task
- * @param {string} assigneeName  - Tên người thực hiện task
- * @param {string} taskId
- * @param {object} taskData      - Row object của task
- * @param {string} [assignerName] - Tên người giao task (nếu khác assigneeName)
- */
-function checkAndAwardAchievements(assigneeName, taskId, taskData, assignerName) {
-  try {
-    if (!assigneeName) return [];
-
-    const staff = getStaffList();
-    const staffMember = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === assigneeName);
-    if (!staffMember) return [];
-    const staffId = staffMember[STAFF_ID_COLUMN_NAME];
-
-    const ss = getSpreadsheet();
-    const achSheet = getOrCreateSheet(ss, ACHIEVEMENT_SHEET_NAME, [
-      ACH_ID_COL, ACH_STAFF_COL, ACH_TYPE_COL, ACH_TITLE_COL,
-      ACH_POINTS_COL, ACH_DATE_COL, ACH_DESC_COL
-    ]);
-
-    const allAch = sheetDataToObjectArray(achSheet);
-    const myAch  = allAch.filter(a => a[ACH_STAFF_COL] === staffId);
-    const myTypes = new Set(myAch.map(a => a[ACH_TYPE_COL]));
-
-    const allTasksList = getTasks();
-    const myCompleted = allTasksList.filter(t =>
-      t[TASK_ASSIGNEE_COLUMN_NAME] === assigneeName &&
-      t[TASK_STATUS_COLUMN_NAME] === 'Hoàn thành'
-    );
-    const completedCount = myCompleted.length;
-
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const newAchievements = [];
-
-    // ── Helper: push achievement if not already earned ───────────────────
-    function award(type, title, points, desc) {
-      if (!myTypes.has(type)) newAchievements.push({ type, title, points, desc });
-    }
-    // Repeatable (awarded every time condition met)
-    function awardRepeat(type, title, points, desc) {
-      newAchievements.push({ type, title, points, desc });
-    }
-
-    // ── 1. Base points per task (+10) ────────────────────────────────────
-    awardRepeat('TASK_DONE', '✅ Hoàn thành nhiệm vụ', 10, `Hoàn thành: ${taskData[TASK_NAME_COLUMN_NAME] || taskId}`);
-
-    // ── 2. High-priority task (+30) ──────────────────────────────────────
-    if ((taskData[TASK_PRIORITY_COLUMN_NAME] || '').toLowerCase().includes('cao')) {
-      awardRepeat('TASK_HIGH', '🔴 Nhiệm vụ ưu tiên cao', 30, 'Hoàn thành task ưu tiên Cao!');
-    }
-
-    // ── 3. Early Bird: hoàn thành trước hạn (+50) ────────────────────────
-    const dueDate = taskData[TASK_DUE_DATE_COLUMN_NAME] ? parseDate(taskData[TASK_DUE_DATE_COLUMN_NAME]) : null;
-    if (dueDate && today < dueDate) {
-      awardRepeat('EARLY_BIRD', '⚡ Hoàn thành trước hạn', 50, 'Hoàn thành nhiệm vụ trước deadline!');
-    }
-
-    // ── 4. Rescuer: hoàn thành task đã quá hạn (+30) ─────────────────────
-    if (dueDate && today > dueDate) {
-      awardRepeat('RESCUER', '🔄 Không bỏ cuộc', 30, 'Hoàn thành nhiệm vụ dù đã quá hạn!');
-    }
-
-    // ── 5. Assigner bonus (+20) – caller passes assignerName ─────────────
-    if (assignerName && assignerName !== assigneeName) {
-      const assignerMember = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === assignerName);
-      if (assignerMember) {
-        const assignerId = assignerMember[STAFF_ID_COLUMN_NAME];
-        // Award points directly to assigner's sheet
-        const assignerAchCount = allAch.filter(a => a[ACH_STAFF_COL] === assignerId).length;
-        const newId = `ACH${String(allAch.length + assignerAchCount + 1).padStart(4, '0')}`;
-        achSheet.appendRow([
-          newId, assignerId, 'ASSIGN_DONE',
-          '📋 Nhiệm vụ được giao hoàn thành', 20,
-          formatSheetDate(new Date()),
-          `Task ${taskId} do ${assigneeName} hoàn thành`,
-        ]);
-      }
-    }
-
-    // ── 6. Milestones ────────────────────────────────────────────────────
-    if (completedCount >= 1   && !myTypes.has('M_1'))    award('M_1',   '🎯 Bước đầu tiên',        50,  'Hoàn thành nhiệm vụ đầu tiên!');
-    if (completedCount >= 10  && !myTypes.has('M_10'))   award('M_10',  '🏅 Chiến binh 10',        100, 'Hoàn thành 10 nhiệm vụ!');
-    if (completedCount >= 30  && !myTypes.has('M_30'))   award('M_30',  '🎖️ Dũng sĩ 30',           300, 'Hoàn thành 30 nhiệm vụ!');
-    if (completedCount >= 50  && !myTypes.has('M_50'))   award('M_50',  '🏆 Chiến thần 50',        500, 'Hoàn thành 50 nhiệm vụ!');
-    if (completedCount >= 100 && !myTypes.has('M_100'))  award('M_100', '👑 Huyền thoại 100',      1000,'Hoàn thành 100 nhiệm vụ!');
-
-    // ── 7. Streak ────────────────────────────────────────────────────────
-    const completedDates = myCompleted
-      .map(t => { const p = parseDate(t[TASK_REPORT_DATE_COLUMN_NAME]); return p ? formatSheetDate(p) : null; })
-      .filter(d => d);
-    const uniqueDates = [...new Set(completedDates)].sort();
-    const streak = calcStreak(uniqueDates);
-
-    if (streak >= 3  && !myTypes.has('STREAK_3'))   award('STREAK_3',  '🔥 Lửa 3 ngày',           100, '3 ngày liên tiếp có task hoàn thành!');
-    if (streak >= 7  && !myTypes.has('STREAK_7'))   award('STREAK_7',  '🔥🔥 Tuần hoàn hảo',       700, '7 ngày liên tiếp – tuần lễ hoàn hảo!');
-    if (streak >= 14 && !myTypes.has('STREAK_14'))  award('STREAK_14', '❄️ Chuỗi 2 tuần',          1000,'14 ngày liên tiếp!');
-    if (streak >= 21 && !myTypes.has('STREAK_21'))  award('STREAK_21', '💎 Chuỗi 3 tuần',          2100,'21 ngày liên tiếp – bất khả chiến bại!');
-    if (streak >= 30 && !myTypes.has('STREAK_30'))  award('STREAK_30', '🌙 Chuỗi 30 ngày',         3000,'30 ngày không gián đoạn!');
-    if (streak >= 60 && !myTypes.has('STREAK_60'))  award('STREAK_60', '☀️ Chuỗi 60 ngày',         6000,'60 ngày – siêu nhân!');
-
-    // ── 8. Daily super-productivity: 5 tasks today (+200) ────────────────
-    const todayStr = formatSheetDate(today);
-    const todayDone = myCompleted.filter(t => {
-      const p = parseDate(t[TASK_REPORT_DATE_COLUMN_NAME]);
-      return p && formatSheetDate(p) === todayStr;
-    }).length;
-    if (todayDone >= 5 && !myTypes.has('SUPER_DAY')) {
-      award('SUPER_DAY', '🏃 Siêu năng suất', 200, '5 nhiệm vụ trong 1 ngày!');
-    }
-
-    // ── 9. Early-bird specialist: ≥5 tasks done before deadline ──────────
-    const earlyCount = myAch.filter(a => a[ACH_TYPE_COL] === 'EARLY_BIRD').length
-      + newAchievements.filter(a => a.type === 'EARLY_BIRD').length;
-    if (earlyCount >= 5 && !myTypes.has('SPEED_DEMON')) {
-      award('SPEED_DEMON', '⚡ Tốc độ sét', 150, 'Hoàn thành ≥5 nhiệm vụ trước deadline!');
-    }
-
-    // ── Save new achievements ─────────────────────────────────────────────
-    const existingCount = allAch.length;
-    newAchievements.forEach((ach, i) => {
-      const newId = `ACH${String(existingCount + i + 1).padStart(4, '0')}`;
-      achSheet.appendRow([
-        newId, staffId, ach.type, ach.title,
-        ach.points, formatSheetDate(new Date()), ach.desc,
-      ]);
-    });
-
-    if (newAchievements.length > 0) SpreadsheetApp.flush();
-
-    return newAchievements;
-  } catch (e) {
-    console.error('Error in checkAndAwardAchievements:', e);
-    return [];
-  }
-}
-
-/**
- * Tính streak (chuỗi ngày liên tiếp tính từ hôm nay trở về trước)
- */
-function calcStreak(sortedDateStrings) {
-  if (!sortedDateStrings || sortedDateStrings.length === 0) return 0;
-  const today = formatSheetDate(new Date());
-  let streak = 0;
-  let checkDate = new Date();
-
-  for (let i = sortedDateStrings.length - 1; i >= 0; i--) {
-    const d = formatSheetDate(parseDate(sortedDateStrings[i]));
-    if (d === formatSheetDate(checkDate)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else if (new Date(d) < checkDate) {
-      break;
-    }
-  }
-  return streak;
-}
-
-/**
- * Lấy bảng xếp hạng (top N nhân viên theo điểm)
- */
-function getLeaderboard(topN) {
-  try {
-    topN = topN || 5;
-    const ss = getSpreadsheet();
-    const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
-    if (!achSheet || achSheet.getLastRow() < 2) return { success: true, leaderboard: [] };
-
-    const allAch = sheetDataToObjectArray(achSheet);
-    const staff = getStaffList();
-    const staffMap = {};
-    staff.forEach(s => { staffMap[s[STAFF_ID_COLUMN_NAME]] = s[STAFF_NAME_COLUMN_NAME]; });
-
-    // Sum điểm theo Mã NV
-    const pointsMap = {};
-    const countMap = {};
-    allAch.forEach(a => {
-      const staffId = a[ACH_STAFF_COL];
-      const pts = parseInt(a[ACH_POINTS_COL], 10) || 0;
-      pointsMap[staffId] = (pointsMap[staffId] || 0) + pts;
-      countMap[staffId] = (countMap[staffId] || 0) + 1;
-    });
-
-    const leaderboard = Object.keys(pointsMap)
-      .map(staffId => ({
-        staffId: staffId,
-        name: staffMap[staffId] || staffId,
-        points: pointsMap[staffId],
-        badges: countMap[staffId],
-      }))
-      .sort((a, b) => b.points - a.points)
-      .slice(0, topN);
-
-    return { success: true, leaderboard: leaderboard };
-  } catch (e) {
-    console.error('Error in getLeaderboard:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Lấy thành tích của nhân viên hiện tại
- */
-function getMyAchievements(token) {
-  try {
-    const currentUser = getCurrentUser(token);
-    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
-
-    const staff = getStaffList();
-    const staffMember = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === currentUser.name);
-    const staffId = staffMember ? staffMember[STAFF_ID_COLUMN_NAME] : null;
-
-    const ss = getSpreadsheet();
-    const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
-    if (!achSheet || achSheet.getLastRow() < 2) {
-      return { success: true, achievements: [], totalPoints: 0, level: getLevelInfo(0) };
-    }
-
-    const allAch = sheetDataToObjectArray(achSheet);
-    const myAch = staffId ? allAch.filter(a => a[ACH_STAFF_COL] === staffId) : [];
-    const totalPoints = myAch.reduce((sum, a) => sum + (parseInt(a[ACH_POINTS_COL], 10) || 0), 0);
-
-    return { success: true, achievements: myAch, totalPoints: totalPoints, level: getLevelInfo(totalPoints) };
-  } catch (e) {
-    console.error('Error in getMyAchievements:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Tổng kết nhiệm vụ hoàn thành trong ngày (dùng cho bot Telegram)
- * Trả về dữ liệu JSON cho từng nhân viên đã đăng ký Telegram
- */
-function getDailySummaryForBot() {
-  try {
-    const today = formatSheetDate(new Date());
-    const allTasks = getTasks();
-    const allProjects = getProjects();
-    const allStaff = getStaffList();
-
-    const projectMap = {};
-    allProjects.forEach(p => { projectMap[p[PROJECT_ID_COLUMN_NAME]] = p[PROJECT_NAME_COLUMN_NAME]; });
-
-    // Lọc tasks hoàn thành trong ngày hôm nay
-    const todayTasks = allTasks.filter(t =>
-      t[TASK_STATUS_COLUMN_NAME] === 'Hoàn thành' &&
-      t[TASK_REPORT_DATE_COLUMN_NAME] === today
-    );
-
-    // Group by assignee
-    const byAssignee = {};
-    todayTasks.forEach(t => {
-      const assignee = t[TASK_ASSIGNEE_COLUMN_NAME] || 'Không rõ';
-      if (!byAssignee[assignee]) byAssignee[assignee] = [];
-      byAssignee[assignee].push({
-        taskId: t[TASK_ID_COLUMN_NAME],
-        taskName: t[TASK_NAME_COLUMN_NAME],
-        projectName: projectMap[t[TASK_PROJECT_ID_COLUMN_NAME]] || t[TASK_PROJECT_ID_COLUMN_NAME],
-        priority: t[TASK_PRIORITY_COLUMN_NAME],
-      });
-    });
-
-    // Tổng team
-    const teamTotal = todayTasks.length;
-
-    // Lấy danh sách Telegram users
-    const ss = getSpreadsheet();
-    const tgSheet = ss.getSheetByName(TELEGRAM_USERS_SHEET_NAME);
-    let telegramUsers = [];
-    if (tgSheet && tgSheet.getLastRow() >= 2) {
-      telegramUsers = sheetDataToObjectArray(tgSheet);
-    }
-
-    // Map Mã NV -> Telegram ID
-    const staffMap = {};
-    allStaff.forEach(s => { staffMap[s[STAFF_ID_COLUMN_NAME]] = s[STAFF_NAME_COLUMN_NAME]; });
-
-    const result = telegramUsers.map(tgUser => {
-      const staffName = staffMap[tgUser[TG_STAFF_COL]] || '';
-      const myTasks = byAssignee[staffName] || [];
-      return {
-        telegramId: tgUser[TG_ID_COL],
-        staffName: staffName,
-        myTasks: myTasks,
-        teamTotal: teamTotal,
-        myTotal: myTasks.length,
-      };
-    });
-
-    return { success: true, summaries: result, date: today };
-  } catch (e) {
-    console.error('Error in getDailySummaryForBot:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Đăng ký Telegram User (dùng từ bot qua /link command)
- */
-function registerTelegramUser(telegramId, staffId, displayName) {
-  try {
-    if (!telegramId || !staffId) return { success: false, error: 'Thiếu thông tin' };
-
-    const ss = getSpreadsheet();
-    const tgSheet = getOrCreateSheet(ss, TELEGRAM_USERS_SHEET_NAME, [
-      TG_ID_COL, TG_STAFF_COL, TG_NAME_COL, TG_DATE_COL
-    ]);
-
-    // Kiểm tra trùng telegramId
-    const existing = sheetDataToObjectArray(tgSheet);
-    const dup = existing.find(r => String(r[TG_ID_COL]) === String(telegramId));
-    if (dup) {
-      // Update
-      const headers = getHeaders(tgSheet);
-      const tgIdIdx = headers.indexOf(TG_ID_COL);
-      for (let row = 2; row <= tgSheet.getLastRow(); row++) {
-        if (String(tgSheet.getRange(row, tgIdIdx + 1).getValue()) === String(telegramId)) {
-          tgSheet.getRange(row, headers.indexOf(TG_STAFF_COL) + 1).setValue(staffId);
-          tgSheet.getRange(row, headers.indexOf(TG_NAME_COL) + 1).setValue(displayName || '');
-          SpreadsheetApp.flush();
-          return { success: true, message: 'Đã cập nhật liên kết Telegram' };
-        }
-      }
-    }
-
-    tgSheet.appendRow([String(telegramId), staffId, displayName || '', formatSheetDate(new Date())]);
-    SpreadsheetApp.flush();
-    return { success: true, message: 'Đăng ký Telegram thành công' };
-  } catch (e) {
-    console.error('Error in registerTelegramUser:', e);
-    return { success: false, error: e.message };
-  }
-}
-
-/**
- * Lấy thông tin Telegram user theo telegramId
- */
-function getTelegramUser(telegramId) {
-  try {
-    const ss = getSpreadsheet();
-    const tgSheet = ss.getSheetByName(TELEGRAM_USERS_SHEET_NAME);
-    if (!tgSheet || tgSheet.getLastRow() < 2) return null;
-
-    const users = sheetDataToObjectArray(tgSheet);
-    return users.find(u => String(u[TG_ID_COL]) === String(telegramId)) || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-/**
- * Tạo overdue notification (stub - giữ tương thích)
- */
-function createOverdueNotificationIfNeeded(task) {
-  // Notification logic placeholder
 }
 
 // Hàm sắp xếp lại thứ tự nhiệm vụ trong dự án
