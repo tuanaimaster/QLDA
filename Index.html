@@ -61,8 +61,22 @@
                 class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold"
               ></div>
               <div class="flex-1 min-w-0">
-                <p id="user-name" class="text-sm font-medium text-gray-900 truncate"></p>
-                <p id="user-role" class="text-xs text-gray-600"></p>
+                <div class="flex items-center gap-1 flex-wrap">
+                  <p id="user-name" class="text-sm font-medium text-gray-900 truncate"></p>
+                  <span id="user-level-badge" class="level-badge hidden">Lv.1 🌱</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <p id="user-role" class="text-xs text-gray-600"></p>
+                  <span id="user-streak-badge" class="streak-badge hidden">🔥1</span>
+                </div>
+                <!-- XP progress bar -->
+                <div class="xp-bar-wrap mt-1">
+                  <div id="user-xp-bar" class="xp-bar-fill" style="width:0%"></div>
+                </div>
+                <div class="flex justify-between mt-0.5">
+                  <span id="user-xp-label" class="text-xs text-purple-600 font-semibold">0 XP</span>
+                  <span id="user-xp-next" class="text-xs text-gray-400">→50 XP</span>
+                </div>
               </div>
             </div>
             <div class="flex gap-2 mt-2">
@@ -511,7 +525,7 @@
                 </div>
               </div>
 
-              <!-- Card 3: Nhiệm vụ đang làm -->
+              <!-- Card 3: Nhiệm vụ đang thực hiện -->
               <div class="modern-stat-card group">
                 <div
                   class="card-gradient bg-gradient-to-br from-amber-500 via-amber-600 to-amber-700"
@@ -523,12 +537,12 @@
                     </div>
                     <div class="main-stat">
                       <span class="stat-number" id="active-tasks">-</span>
-                      <span class="stat-label">Nhiệm vụ đang làm</span>
+                      <span class="stat-label">Đang thực hiện</span>
                     </div>
                   </div>
                   <div class="card-details">
                     <div class="detail-item">
-                      <i class="fas fa-play-circle"></i>
+                      <i class="fas fa-clock"></i>
                       <span>Chưa bắt đầu: <strong id="pending-tasks">-</strong></span>
                     </div>
                     <div class="detail-item">
@@ -566,6 +580,19 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Daily Quest mini-widget -->
+          <div class="glass-card mb-6">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <span>🎯</span> Nhiệm vụ hôm nay
+              </h3>
+              <a href="#" data-section="achievements" class="nav-link text-xs text-purple-600 hover:underline font-medium">Xem tất cả →</a>
+            </div>
+            <div id="overview-quests" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="quest-card"><div class="quest-icon">⏳</div><span class="text-sm text-gray-400">Đang tải...</span></div>
             </div>
           </div>
 
@@ -1040,6 +1067,17 @@
             <h3 class="text-2xl font-bold text-gray-900">Thành tích &amp; Bảng xếp hạng</h3>
           </div>
 
+          <!-- Daily Quests -->
+          <div class="glass-card mb-6">
+            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <span class="text-2xl">🎯</span> Nhiệm vụ hàng ngày
+              <span id="quest-date" class="text-xs font-normal text-gray-400 ml-2"></span>
+            </h4>
+            <div id="daily-quests-list" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div class="quest-card"><div class="quest-icon">⏳</div><span class="text-sm text-gray-400">Đang tải...</span></div>
+            </div>
+          </div>
+
           <!-- Scoring Guide -->
           <div class="glass-card mb-6">
             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -1090,6 +1128,9 @@
               <div id="current-period" class="font-semibold text-gray-700 px-4"></div>
               <button id="next-month" class="btn-secondary py-2 px-4">
                 <i class="fas fa-chevron-right ml-1"></i>
+              </button>
+              <button id="today-month" class="btn-secondary py-2 px-3 text-sm text-blue-600 border-blue-300 hover:bg-blue-50" title="Về tháng hiện tại">
+                <i class="fas fa-calendar-day mr-1"></i>Hôm nay
               </button>
             </div>
 

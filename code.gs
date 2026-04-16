@@ -67,7 +67,7 @@ const CHAT_JSON_COLUMN_NAME = 'Chat JSON';
  * Phục vụ giao diện HTML khi truy cập URL ứng dụng web.
  */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('index')
+  return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('Quản Lý Dự Án')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -560,7 +560,43 @@ function addTaskWithAuth(taskData) {
     return permissionCheck;
   }
 
-  return addTask(taskData);
+  const result = addTask(taskData);
+  if (!result.success) return result;
+
+  // Tự động tạo các nhiệm vụ lặp lại
+  const isRecurring = taskData.isRecurring === '1' || taskData.isRecurring === true;
+  const interval = taskData.recurringInterval; // 'daily'|'weekly'|'monthly'
+  const count = parseInt(taskData.recurringCount) || 0;
+
+  if (isRecurring && interval && count > 0) {
+    const tz = Session.getScriptTimeZone();
+    const safeParse = function(d) {
+      if (!d) return null;
+      try { return new Date(d); } catch(e) { return null; }
+    };
+    const startD = safeParse(taskData.startDate);
+    const dueD   = safeParse(taskData.dueDate);
+    const safeCount = Math.min(count, 52);
+
+    for (var i = 1; i <= safeCount; i++) {
+      var days = interval === 'daily' ? i : interval === 'weekly' ? i * 7 : i * 30;
+      var ns = startD ? new Date(startD.getTime() + days * 86400000) : null;
+      var nd = dueD   ? new Date(dueD.getTime()   + days * 86400000) : null;
+
+      var copyData = JSON.parse(JSON.stringify(taskData)); // deep copy
+      copyData.name = taskData.name + ' (' + (i + 1) + '/' + (safeCount + 1) + ')';
+      copyData.startDate = ns ? Utilities.formatDate(ns, tz, 'yyyy-MM-dd') : '';
+      copyData.dueDate   = nd ? Utilities.formatDate(nd, tz, 'yyyy-MM-dd') : '';
+      copyData.isRecurring  = false;
+      copyData.recurringCount = 0;
+      copyData.status = 'Chưa bắt đầu';
+      copyData.completion = 0;
+      copyData.reportDate = '';
+      addTask(copyData);
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -2825,4 +2861,144 @@ function uploadAvatar(base64Data, mimeType) {
     console.error('uploadAvatar error:', e);
     return { success: false, error: e.message };
   }
+}
+
+// ============================================================
+// === HÀM TẠO DỮ LIỆU MẪU "QLDA Project" ===
+// Chạy hàm này 1 lần từ GAS Editor (Tools > Run function > seedQldaProject)
+// ============================================================
+function seedQldaProject() {
+  // 1. Tạo dự án
+  const projectResult = addProject({
+    name: 'QLDA Project',
+    description: 'Dự án xây dựng hệ thống quản lý dự án nội bộ – theo dõi nhiệm vụ, thành viên và tiến độ.',
+    manager: '',
+    startDate: '2026-04-01',
+    endDate: '2026-12-31',
+    status: 'Đang thực hiện',
+  });
+
+  if (!projectResult.success) {
+    Logger.log('Tạo dự án thất bại: ' + projectResult.error);
+    return;
+  }
+
+  const pid = projectResult.projectId;
+  Logger.log('Đã tạo dự án: ' + pid);
+
+  // 2. Danh sách nhiệm vụ
+  const tasks = [
+    // --- Chưa bắt đầu ---
+    {
+      name: 'Thiết kế giao diện mobile responsive',
+      description: 'Cải thiện giao diện để hiển thị tốt trên thiết bị di động.',
+      status: 'Chưa bắt đầu', priority: 'Cao',
+      startDate: '2026-05-01', dueDate: '2026-05-20', completion: 0,
+    },
+    {
+      name: 'Viết tài liệu hướng dẫn sử dụng',
+      description: 'Soạn thảo tài liệu chi tiết cho người dùng cuối.',
+      status: 'Chưa bắt đầu', priority: 'Trung bình',
+      startDate: '2026-05-15', dueDate: '2026-06-01', completion: 0,
+    },
+    {
+      name: 'Tích hợp thông báo email tự động',
+      description: 'Gửi email nhắc nhở khi nhiệm vụ sắp đến hạn.',
+      status: 'Chưa bắt đầu', priority: 'Thấp',
+      startDate: '2026-06-01', dueDate: '2026-06-30', completion: 0,
+    },
+    // --- Đang thực hiện ---
+    {
+      name: 'Phát triển tính năng báo cáo thống kê',
+      description: 'Biểu đồ tổng hợp tiến độ dự án và nhiệm vụ.',
+      status: 'Đang thực hiện', priority: 'Cao',
+      startDate: '2026-04-10', dueDate: '2026-05-10', completion: 45,
+    },
+    {
+      name: 'Tối ưu hóa truy vấn Google Sheets',
+      description: 'Giảm số lần đọc/ghi sheet để cải thiện tốc độ.',
+      status: 'Đang thực hiện', priority: 'Trung bình',
+      startDate: '2026-04-05', dueDate: '2026-04-30', completion: 60,
+    },
+    {
+      name: 'Kiểm thử chức năng Kanban Board',
+      description: 'Viết test case và kiểm tra toàn bộ luồng kéo thả.',
+      status: 'Đang thực hiện', priority: 'Cao',
+      startDate: '2026-04-12', dueDate: '2026-04-25', completion: 75,
+    },
+    // --- Telegram Bot Integration ---
+    {
+      name: 'Kết nối Telegram Bot API với GAS',
+      description: 'Thiết lập webhook Telegram, xác thực token và gọi API gửi/nhận tin nhắn từ Google Apps Script.',
+      status: 'Chưa bắt đầu', priority: 'Cao',
+      startDate: '2026-05-01', dueDate: '2026-05-15', completion: 0,
+    },
+    {
+      name: 'Lệnh /tasks – Xem danh sách nhiệm vụ qua Telegram',
+      description: 'Bot trả về danh sách nhiệm vụ đang được giao cho người dùng khi họ gõ /tasks.',
+      status: 'Chưa bắt đầu', priority: 'Cao',
+      startDate: '2026-05-10', dueDate: '2026-05-25', completion: 0,
+    },
+    {
+      name: 'Lệnh /done – Đánh dấu hoàn thành nhiệm vụ qua Telegram',
+      description: 'User gõ /done <ID> để cập nhật trạng thái nhiệm vụ mà không cần mở web app.',
+      status: 'Chưa bắt đầu', priority: 'Trung bình',
+      startDate: '2026-05-20', dueDate: '2026-06-05', completion: 0,
+    },
+    {
+      name: 'Thông báo nhắc nhiệm vụ sắp hết hạn qua Telegram',
+      description: 'Trigger tự động chạy hàng ngày, gửi nhắc nhở qua Telegram khi nhiệm vụ còn 1–3 ngày.',
+      status: 'Đang thực hiện', priority: 'Cao',
+      startDate: '2026-04-15', dueDate: '2026-05-05', completion: 35,
+    },
+    {
+      name: 'Xác thực Telegram ID với tài khoản QLDA',
+      description: 'Liên kết Telegram user ID với mã nhân viên trong hệ thống để phân quyền lệnh bot.',
+      status: 'Đang thực hiện', priority: 'Cao',
+      startDate: '2026-04-20', dueDate: '2026-05-10', completion: 20,
+    },
+    {
+      name: 'Deploy Telegram Bot lên VPS production',
+      description: 'Cài đặt, cấu hình và chạy ổn định Telegram Bot trên VPS, kiểm thử end-to-end.',
+      status: 'Hoàn thành', priority: 'Trung bình',
+      startDate: '2026-04-01', dueDate: '2026-04-15', completion: 100,
+      reportDate: '2026-04-14',
+    },
+    // --- Hoàn thành ---
+    {
+      name: 'Xây dựng module quản lý dự án cơ bản',
+      description: 'Tạo/sửa/xóa dự án, gán thành viên.',
+      status: 'Hoàn thành', priority: 'Cao',
+      startDate: '2026-03-01', dueDate: '2026-03-31', completion: 100,
+      reportDate: '2026-03-28',
+    },
+    {
+      name: 'Triển khai hệ thống xác thực người dùng',
+      description: 'Đăng nhập bằng mã nhân viên + mật khẩu, token session.',
+      status: 'Hoàn thành', priority: 'Cao',
+      startDate: '2026-03-05', dueDate: '2026-03-25', completion: 100,
+      reportDate: '2026-03-24',
+    },
+    {
+      name: 'Thiết lập cấu trúc Google Spreadsheet',
+      description: 'Tạo các sheet Dự án, Người dùng, Thông báo với đúng headers.',
+      status: 'Hoàn thành', priority: 'Trung bình',
+      startDate: '2026-02-15', dueDate: '2026-03-01', completion: 100,
+      reportDate: '2026-02-28',
+    },
+  ];
+
+  let successCount = 0;
+  for (const t of tasks) {
+    const r = addTask({ ...t, projectId: pid });
+    if (r.success) {
+      successCount++;
+      Logger.log('  + Task: ' + t.name + ' [' + t.status + '] => ' + r.taskId);
+    } else {
+      Logger.log('  ! Lỗi task "' + t.name + '": ' + r.error);
+    }
+  }
+
+  Logger.log('===== Hoàn thành: ' + successCount + '/' + tasks.length + ' nhiệm vụ đã tạo =====');
+  Logger.log('Mở app và kiểm tra dự án: ' + pid);
 }

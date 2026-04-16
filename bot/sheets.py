@@ -133,8 +133,9 @@ class SheetsDB:
         return tasks
 
     def get_tasks_for_assignee(self, assignee_name: str) -> list[dict]:
+        name_lower = assignee_name.strip().lower()
         return [t for t in self.get_all_tasks()
-                if str(t.get(T_ASSIGNEE, "")).strip() == assignee_name.strip()]
+                if str(t.get(T_ASSIGNEE, "")).strip().lower() == name_lower]
 
     def get_task_by_id(self, task_id: str) -> tuple[dict | None, dict | None]:
         """Return (task, project) or (None, None)."""

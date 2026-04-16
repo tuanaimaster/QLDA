@@ -58,10 +58,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text(
             "👋 Xin chào! Đây là bot quản lý dự án <b>QLDA</b>.\n\n"
-            "Để bắt đầu, hãy liên kết tài khoản Telegram với tài khoản nhân viên:\n"
-            "<code>/link &lt;Mã NV&gt;</code>\n\n"
-            "Ví dụ: <code>/link NV001</code>",
+            "Để bắt đầu, chọn tên bạn trong danh sách nhân viên — bấm nút bên dưới:",
             parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔗 Chọn tên để liên kết", callback_data="lnk:__list__")
+            ]]),
         )
 
 
@@ -106,15 +107,35 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    db = SheetsDB.get()
+    # No args — show staff list as inline keyboard
     if not context.args:
+        staff_all = db.get_all_staff()
+        if not staff_all:
+            await update.message.reply_text("❌ Chưa có dữ liệu nhân viên.")
+            return
+        buttons = []
+        row = []
+        for s in staff_all:
+            sid  = str(s.get(COL_STAFF_ID,   s.get("Mã NV", ""))).strip()
+            name = str(s.get(COL_STAFF_NAME,  s.get("Họ tên", ""))).strip()
+            if not sid:
+                continue
+            label = f"{name} ({sid})" if name else sid
+            row.append(InlineKeyboardButton(label, callback_data=f"lnk:{sid}"))
+            if len(row) == 1:           # 1 button per row (names can be long)
+                buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+        buttons.append([InlineKeyboardButton("❌ Hủy", callback_data="lnk:cancel")])
         await update.message.reply_text(
-            "❌ Thiếu Mã NV.\nCú pháp: <code>/link NV001</code>",
-            parse_mode=ParseMode.HTML,
+            "👤 Chọn tên bạn trong danh sách nhân viên:",
+            reply_markup=InlineKeyboardMarkup(buttons),
         )
         return
 
     staff_id = context.args[0].strip().upper()
-    db = SheetsDB.get()
     staff = db.get_staff_by_id(staff_id)
     if not staff:
         await update.message.reply_text(
@@ -138,6 +159,28 @@ async def cmd_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"✅ Liên kết thành công!\n👤 <b>{display_name}</b> ({staff_id})\n\n"
             "Chọn chức năng bên dưới để bắt đầu:",
         )
+
+
+async def _do_link_by_id(update: Update, staff_id: str) -> None:
+    """Link current Telegram user to a staff ID — used by inline callback."""
+    db = SheetsDB.get()
+    staff = db.get_staff_by_id(staff_id)
+    if not staff:
+        await update.callback_query.edit_message_text(
+            f"❌ Không tìm thấy nhân viên mã <b>{staff_id}</b>.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+    tg_user = update.effective_user
+    display_name = staff.get(COL_STAFF_NAME, tg_user.full_name)
+    result = db.register_telegram_user(str(tg_user.id), staff_id, display_name)
+    verb = "cập nhật" if result.get("updated") else "liên kết"
+    await update.callback_query.edit_message_text(
+        f"✅ Đã {verb}: <b>{display_name}</b> ({staff_id})\n\n"
+        "Bấm /menu để bắt đầu.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu chính", callback_data="menu:home")]]),
+    )
 
 
 async def cmd_me(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -215,10 +258,46 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await send_main_menu(update, "🏠 <b>Menu chính</b>\nChọn chức năng:")
 
 
-def register(app) -> None:
+async def handle_link_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle lnk: callbacks — show staff list or confirm linking."""
+    query = update.callback_query
+    await query.answer()
+    data = query.data  # "lnk:<staff_id>" or "lnk:cancel" or "lnk:__list__"
+    action = data.split(":", 1)[1]
+
+    if action == "cancel":
+        await query.edit_message_text("❌ Đã hủy.")
+        return
+
+    db = SheetsDB.get()
+
+    if action == "__list__":
+        # Show the staff picker keyboard
+        staff_all = db.get_all_staff()
+        buttons = []
+        for s in staff_all:
+            sid  = str(s.get(COL_STAFF_ID,  s.get("Mã NV", ""))).strip()
+            name = str(s.get(COL_STAFF_NAME, s.get("Họ tên", ""))).strip()
+            if not sid:
+                continue
+            label = f"{name} ({sid})" if name else sid
+            buttons.append([InlineKeyboardButton(label, callback_data=f"lnk:{sid}")])
+        buttons.append([InlineKeyboardButton("❌ Hủy", callback_data="lnk:cancel")])
+        await query.edit_message_text(
+            "👤 Chọn tên bạn trong danh sách:",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+        return
+
+    # action is a staff_id — perform the link
+    await _do_link_by_id(update, action.upper())
+
+
+
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu",  cmd_menu))
     app.add_handler(CommandHandler("help",  cmd_help))
     app.add_handler(CommandHandler("link",  cmd_link))
     app.add_handler(CommandHandler("me",    cmd_me))
     app.add_handler(CallbackQueryHandler(handle_menu_callback, pattern=r"^menu:"))
+    app.add_handler(CallbackQueryHandler(handle_link_callback, pattern=r"^lnk:"))

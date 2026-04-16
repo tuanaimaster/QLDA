@@ -57,42 +57,113 @@ def _require_linked(func):
 
 
 # ------------------------------------------------------------------
-# /mytasks
+# /mytasks — with inline ✅ buttons per active task
 # ------------------------------------------------------------------
 async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
-                                         parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(
+            "❌ Chưa liên kết. Dùng /link để chọn tên.",
+            parse_mode=ParseMode.HTML,
+        )
         return
 
     my_name = linked.get("Tên hiển thị", "")
     tasks = db.get_tasks_for_assignee(my_name)
 
     if not tasks:
-        await update.effective_message.reply_text("📭 Bạn chưa có nhiệm vụ nào.")
+        await update.effective_message.reply_text(
+            f"📭 <b>{my_name}</b> chưa có nhiệm vụ nào.\n\n"
+            "Dùng ➕ <b>Thêm nhiệm vụ</b> từ /menu để tạo nhiệm vụ đầu tiên.",
+            parse_mode=ParseMode.HTML,
+        )
         return
 
-    active = [t for t in tasks if t.get(T_STATUS) != "Hoàn thành"]
-    done = [t for t in tasks if t.get(T_STATUS) == "Hoàn thành"]
+    active = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() != "Hoàn thành"]
+    done   = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() == "Hoàn thành"]
 
-    lines = [f"📋 <b>Nhiệm vụ của {my_name}</b>\n"]
+    lines = [f"📋 <b>Nhiệm vụ của {my_name}</b>  ({len(active)} đang làm · ✅{len(done)})\n"]
+    keyboard_rows = []
     for t in active[:10]:
-        emoji = STATUS_EMOJI.get(t.get(T_STATUS, ""), "📌")
-        prio = PRIORITY_EMOJI.get(t.get(T_PRIORITY, ""), "")
-        due = t.get(T_DUE, "")
-        due_str = f" | ⏰ {due}" if due else ""
-        lines.append(
-            f"{emoji} {prio} <code>{t.get(T_ID, '')}</code> {t.get(T_NAME, '')}{due_str}"
-        )
+        tid   = t.get(T_ID, "")
+        tname = t.get(T_NAME, "")
+        emoji = STATUS_EMOJI.get((t.get(T_STATUS) or "").strip(), "📌")
+        prio  = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
+        due   = t.get(T_DUE, "")
+        due_str = f" ⏰{due}" if due else ""
+        lines.append(f"{emoji}{prio} <code>{tid}</code> {tname}{due_str}")
+        keyboard_rows.append([
+            InlineKeyboardButton(f"✅ Xong: {tname[:28]}", callback_data=f"tdone:{tid}")
+        ])
 
     if len(active) > 10:
-        lines.append(f"... và {len(active) - 10} nhiệm vụ chưa hoàn thành khác")
+        lines.append(f"\n…và {len(active) - 10} nhiệm vụ khác")
 
-    lines.append(f"\n✅ Đã hoàn thành: {len(done)} nhiệm vụ")
-    lines.append("\nDùng /donetask &lt;ID&gt; để đánh dấu hoàn thành.")
-    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    keyboard_rows.append([InlineKeyboardButton("🔄 Làm mới", callback_data="tdone:__refresh__")])
+
+    await update.effective_message.reply_text(
+        "\n".join(lines),
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(keyboard_rows),
+    )
+
+
+async def handle_task_done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle tdone:<task_id> or tdone:__refresh__ inline buttons."""
+    query = update.callback_query
+    await query.answer()
+    task_id = query.data.split(":", 1)[1]
+
+    if task_id == "__refresh__":
+        await cmd_mytasks(update, context)
+        return
+
+    db = SheetsDB.get()
+    result = db.update_task_status(task_id.upper(), "Hoàn thành")
+    if not result.get("success"):
+        await query.answer(f"❌ {result.get('error', 'Lỗi')}", show_alert=True)
+        return
+
+    task = result.get("task", {})
+    tname = task.get(T_NAME, task_id)
+    # Refresh the task list in the same message
+    linked = db.get_telegram_user(str(update.effective_user.id))
+    my_name = linked.get("Tên hiển thị", "") if linked else ""
+    tasks = db.get_tasks_for_assignee(my_name)
+    active = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() != "Hoàn thành"]
+    done   = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() == "Hoàn thành"]
+
+    lines = [
+        f"✅ <b>Hoàn thành:</b> {tname} 🎉\n",
+        f"📋 <b>Nhiệm vụ của {my_name}</b>  ({len(active)} đang làm · ✅{len(done)})\n",
+    ]
+    keyboard_rows = []
+    for t in active[:10]:
+        tid   = t.get(T_ID, "")
+        tname2 = t.get(T_NAME, "")
+        emoji = STATUS_EMOJI.get((t.get(T_STATUS) or "").strip(), "📌")
+        prio  = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
+        due   = t.get(T_DUE, "")
+        due_str = f" ⏰{due}" if due else ""
+        lines.append(f"{emoji}{prio} <code>{tid}</code> {tname2}{due_str}")
+        keyboard_rows.append([
+            InlineKeyboardButton(f"✅ Xong: {tname2[:28]}", callback_data=f"tdone:{tid}")
+        ])
+
+    if not active:
+        lines.append("🎉 Tất cả nhiệm vụ đã hoàn thành!")
+
+    keyboard_rows.append([InlineKeyboardButton("🔄 Làm mới", callback_data="tdone:__refresh__")])
+
+    try:
+        await query.edit_message_text(
+            "\n".join(lines),
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+        )
+    except Exception:
+        pass  # Message may be unchanged if no active tasks left
 
 
 # ------------------------------------------------------------------
@@ -304,6 +375,7 @@ def register(app) -> None:
     app.add_handler(CommandHandler("mytasks", cmd_mytasks))
     app.add_handler(CommandHandler("donetask", cmd_donetask))
     app.add_handler(CommandHandler("assign", cmd_assign))
+    app.add_handler(CallbackQueryHandler(handle_task_done_callback, pattern=r"^tdone:"))
 
     add_conv = ConversationHandler(
         entry_points=[CommandHandler("addtask", add_start)],
