@@ -95,7 +95,7 @@ async def cmd_daily(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    my_name = linked.get("Tên hiển thị", "")
+    my_name = db.resolve_staff_name(linked)
     team_stats = db.get_report_summary()
     my_stats = db.get_report_summary(assignee_name=my_name)
     text = _build_report_text("", team_stats, personal_stats=my_stats)
@@ -118,7 +118,7 @@ async def handle_report_callback(
 
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
-    my_name = linked.get("Tên hiển thị", "") if linked else ""
+    my_name = db.resolve_staff_name(linked) if linked else ""
 
     parts = query.data.split(":", 2)
     action = parts[1] if len(parts) > 1 else ""
@@ -179,7 +179,7 @@ async def send_daily_summary(bot: Bot) -> None:
     sent = 0
     for tg_user in tg_users:
         telegram_id = str(tg_user.get("Telegram ID", "")).strip()
-        name = str(tg_user.get("Tên hiển thị", "")).strip()
+        name = db.resolve_staff_name(tg_user)
         if not telegram_id or not name:
             continue
         try:

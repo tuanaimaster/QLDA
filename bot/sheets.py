@@ -137,6 +137,18 @@ class SheetsDB:
         return [t for t in self.get_all_tasks()
                 if str(t.get(T_ASSIGNEE, "")).strip().lower() == name_lower]
 
+    def resolve_staff_name(self, telegram_user_row: dict) -> str:
+        """Return the real 'Họ tên' from the staff sheet using the linked Mã NV.
+        Falls back to 'Tên hiển thị' if the staff record can't be found."""
+        staff_id = str(telegram_user_row.get(COL_TG_STAFF, "")).strip()
+        if staff_id:
+            staff = self.get_staff_by_id(staff_id)
+            if staff:
+                real_name = str(staff.get(COL_STAFF_NAME, "")).strip()
+                if real_name:
+                    return real_name
+        return str(telegram_user_row.get(COL_TG_NAME, "")).strip()
+
     def get_task_by_id(self, task_id: str) -> tuple[dict | None, dict | None]:
         """Return (task, project) or (None, None)."""
         for p in self.get_all_projects():

@@ -69,7 +69,7 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    my_name = linked.get("Tên hiển thị", "")
+    my_name = db.resolve_staff_name(linked)
     tasks = db.get_tasks_for_assignee(my_name)
 
     if not tasks:
@@ -129,7 +129,7 @@ async def handle_task_done_callback(update: Update, context: ContextTypes.DEFAUL
     tname = task.get(T_NAME, task_id)
     # Refresh the task list in the same message
     linked = db.get_telegram_user(str(update.effective_user.id))
-    my_name = linked.get("Tên hiển thị", "") if linked else ""
+    my_name = db.resolve_staff_name(linked) if linked else ""
     tasks = db.get_tasks_for_assignee(my_name)
     active = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() != "Hoàn thành"]
     done   = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() == "Hoàn thành"]
