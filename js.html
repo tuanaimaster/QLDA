@@ -231,8 +231,9 @@
 
     if (userAvatar && userName && userRole) {
       const initials = user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-      if (user.avatar) {
-        userAvatar.innerHTML = `<img src="${user.avatar}" class="w-full h-full object-cover rounded-full" alt="avatar" onerror="this.parentElement.textContent='${initials}';this.parentElement.innerHTML='${initials}';" />`;
+      const avatarSrc = user._avatarDataUrl || user.avatar;
+      if (avatarSrc) {
+        userAvatar.innerHTML = `<img src="${avatarSrc}" class="w-full h-full object-cover rounded-full" alt="avatar" onerror="this.style.display='none';this.parentElement.textContent='${initials}';" />`;
       } else {
         userAvatar.textContent = initials;
       }
@@ -5410,8 +5411,9 @@
     const avatarDisplay = document.getElementById('profile-avatar-display');
     if (avatarDisplay) {
       const initials = (currentUser.name || '?').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-      if (currentUser.avatar) {
-        avatarDisplay.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover" alt="avatar" onerror="this.parentElement.textContent='${initials}';" />`;
+      const avatarSrc = currentUser._avatarDataUrl || currentUser.avatar;
+      if (avatarSrc) {
+        avatarDisplay.innerHTML = `<img src="${avatarSrc}" class="w-full h-full object-cover" alt="avatar" onerror="this.style.display='none';this.parentElement.textContent='${initials}';" />`;
       } else {
         avatarDisplay.textContent = initials;
       }
@@ -5537,8 +5539,12 @@
           input.value = '';
           if (resp.success) {
             currentUser.avatar = resp.avatarUrl;
+            currentUser._avatarDataUrl = dataUrl; // keep local copy as fast preview
+            // Update avatar display in modal too
+            const avatarDisplay = document.getElementById('profile-avatar-display');
+            if (avatarDisplay) avatarDisplay.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover" alt="avatar" />`;
             updateUIForUser(currentUser);
-            showToast('Ảnh đại diện đã được cập nhật!', 'success');
+            showToast('\u1ea2nh \u0111\u1ea1i di\u1ec7n \u0111\u00e3 \u0111\u01b0\u1ee3c c\u1eadp nh\u1eadt!', 'success');
           } else {
             showToast(resp.error || 'Lỗi khi tải ảnh lên', 'error');
           }
@@ -5593,6 +5599,7 @@
     board.innerHTML = STATUSES.map(function (status) {
       const cfg = STATUS_CONFIG[status];
       const colTasks = tasks.filter(function (t) { return (t[COL.T_STATUS] || 'Chưa bắt đầu') === status; });
+      const canAdd = isAuthenticated && canUserCreateTask();
       return `<div class="kanban-col flex-shrink-0 w-72 ${cfg.color} rounded-2xl p-3 min-h-64"
                    data-status="${status}"
                    ondragover="event.preventDefault(); this.classList.add('ring-2','ring-blue-400')"
@@ -5603,13 +5610,32 @@
             <i class="fas ${cfg.icon} text-sm"></i>
             <span class="font-semibold text-gray-800 text-sm">${status}</span>
           </div>
-          <span class="text-xs ${cfg.badge} px-2 py-0.5 rounded-full font-medium">${colTasks.length}</span>
+          <div class="flex items-center gap-1">
+            <span class="text-xs ${cfg.badge} px-2 py-0.5 rounded-full font-medium">${colTasks.length}</span>
+            ${canAdd ? `<button onclick="openKanbanAddTask('${status}')" title="Thêm nhiệm vụ" class="w-6 h-6 flex items-center justify-center rounded-full bg-white/80 hover:bg-white text-gray-500 hover:text-indigo-600 shadow-sm transition-colors text-xs"><i class="fas fa-plus"></i></button>` : ''}
+          </div>
         </div>
         <div class="space-y-2 min-h-12" id="kanban-col-${status.replace(/\s+/g,'_')}">
-          ${colTasks.map(function (t) { return kanbanCard(t); }).join('') || '<div class="text-center text-xs text-gray-400 py-4">Kéo thả nhiệm vụ vào đây</div>'}
+          ${colTasks.map(function (t) { return kanbanCard(t); }).join('') || `<div class="text-center text-xs text-gray-400 py-6 border-2 border-dashed border-gray-200 rounded-xl">${canAdd ? '<button onclick="openKanbanAddTask(\''+status+'\')" class="text-indigo-400 hover:text-indigo-600 font-medium">+ Thêm nhiệm vụ</button>' : 'Kéo thả nhiệm vụ vào đây'}</div>`}
         </div>
       </div>`;
     }).join('');
+  }
+
+  function openKanbanAddTask(status) {
+    if (!isAuthenticated || !canUserCreateTask()) {
+      showToast('Bạn không có quyền tạo nhiệm vụ', 'error');
+      return;
+    }
+    openModal('task');
+    setTimeout(function () {
+      const statusSelect = document.querySelector('#task-modal select[name="status"]');
+      if (statusSelect) {
+        statusSelect.value = status;
+        // trigger change so completion auto-sets to 100 if Hoàn thành
+        statusSelect.dispatchEvent(new Event('change'));
+      }
+    }, 80);
   }
 
   function kanbanCard(task) {
@@ -5629,6 +5655,8 @@
                  draggable="true"
                  ondragstart="event.dataTransfer.setData('taskId','${id}'); event.currentTarget.style.opacity='0.5'"
                  ondragend="event.currentTarget.style.opacity='1'"
+                 ondblclick="openEditModal('task','${id}')"
+                 title="Nhấp đúp để chỉnh sửa"
                  data-task-id="${id}">
       <p class="font-medium text-gray-900 text-sm mb-2 line-clamp-2">${name}</p>
       ${projectName ? `<p class="text-xs text-blue-600 mb-2 truncate"><i class="fas fa-folder mr-1"></i>${projectName}</p>` : ''}

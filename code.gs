@@ -2667,7 +2667,7 @@ function uploadAvatar(base64Data, mimeType, filename, token) {
 
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    const avatarUrl = 'https://drive.google.com/uc?id=' + file.getId();
+    const avatarUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w300';
 
     // Save URL to Staff sheet
     const ss = getSpreadsheet();
