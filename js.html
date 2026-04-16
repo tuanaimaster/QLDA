@@ -97,9 +97,12 @@
   function showLoginModal() {
     const loginModal = document.getElementById('login-modal');
     if (loginModal) {
+      const modalCard = loginModal.querySelector('.bg-white\/90') || loginModal.firstElementChild;
       loginModal.classList.remove('opacity-0', 'invisible');
-      loginModal.querySelector('.bg-white\\/90').classList.remove('scale-95');
-      loginModal.querySelector('.bg-white\\/90').classList.add('scale-100');
+      if (modalCard) {
+        modalCard.classList.remove('scale-95');
+        modalCard.classList.add('scale-100');
+      }
 
       // Focus on email input
       setTimeout(() => {
@@ -111,8 +114,11 @@
   function hideLoginModal() {
     const loginModal = document.getElementById('login-modal');
     if (loginModal) {
-      loginModal.querySelector('.bg-white\\/90').classList.remove('scale-100');
-      loginModal.querySelector('.bg-white\\/90').classList.add('scale-95');
+      const modalCard = loginModal.querySelector('.bg-white\/90') || loginModal.firstElementChild;
+      if (modalCard) {
+        modalCard.classList.remove('scale-100');
+        modalCard.classList.add('scale-95');
+      }
 
       setTimeout(() => {
         loginModal.classList.add('opacity-0', 'invisible');
