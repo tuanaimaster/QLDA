@@ -5600,25 +5600,39 @@
       const cfg = STATUS_CONFIG[status];
       const colTasks = tasks.filter(function (t) { return (t[COL.T_STATUS] || 'Chưa bắt đầu') === status; });
       const canAdd = isAuthenticated && canUserCreateTask();
-      return `<div class="kanban-col flex-shrink-0 w-72 ${cfg.color} rounded-2xl p-3 min-h-64"
-                   data-status="${status}"
-                   ondragover="event.preventDefault(); this.classList.add('ring-2','ring-blue-400')"
-                   ondragleave="this.classList.remove('ring-2','ring-blue-400')"
-                   ondrop="handleKanbanDrop(event,'${status}')">
-        <div class="flex items-center justify-between mb-3 px-1">
-          <div class="flex items-center gap-2">
-            <i class="fas ${cfg.icon} text-sm"></i>
-            <span class="font-semibold text-gray-800 text-sm">${status}</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="text-xs ${cfg.badge} px-2 py-0.5 rounded-full font-medium">${colTasks.length}</span>
-            ${canAdd ? `<button onclick="openKanbanAddTask('${status}')" title="Thêm nhiệm vụ" class="w-6 h-6 flex items-center justify-center rounded-full bg-white/80 hover:bg-white text-gray-500 hover:text-indigo-600 shadow-sm transition-colors text-xs"><i class="fas fa-plus"></i></button>` : ''}
-          </div>
-        </div>
-        <div class="space-y-2 min-h-12" id="kanban-col-${status.replace(/\s+/g,'_')}">
-          ${colTasks.map(function (t) { return kanbanCard(t); }).join('') || `<div class="text-center text-xs text-gray-400 py-6 border-2 border-dashed border-gray-200 rounded-xl">${canAdd ? '<button onclick="openKanbanAddTask(\''+status+'\')" class="text-indigo-400 hover:text-indigo-600 font-medium">+ Thêm nhiệm vụ</button>' : 'Kéo thả nhiệm vụ vào đây'}</div>`}
-        </div>
-      </div>`;
+      const safeStatus = status.replace(/'/g, "\\'");
+
+      // Build add button HTML (no nested backtick)
+      const addBtn = canAdd
+        ? '<button onclick="openKanbanAddTask(\'' + safeStatus + '\')" title="Thêm nhiệm vụ" class="w-6 h-6 flex items-center justify-center rounded-full bg-white/80 hover:bg-white text-gray-500 hover:text-indigo-600 shadow-sm transition-colors text-xs"><i class="fas fa-plus"></i></button>'
+        : '';
+
+      // Build empty state HTML (no nested backtick)
+      const emptyState = canAdd
+        ? '<div class="text-center text-xs text-gray-400 py-6 border-2 border-dashed border-gray-200 rounded-xl"><button onclick="openKanbanAddTask(\'' + safeStatus + '\')" class="text-indigo-400 hover:text-indigo-600 font-medium">+ Thêm nhiệm vụ</button></div>'
+        : '<div class="text-center text-xs text-gray-400 py-4">Kéo thả nhiệm vụ vào đây</div>';
+
+      const cardsHTML = colTasks.map(function (t) { return kanbanCard(t); }).join('') || emptyState;
+
+      return '<div class="kanban-col flex-shrink-0 w-72 ' + cfg.color + ' rounded-2xl p-3 min-h-64"'
+        + ' data-status="' + status + '"'
+        + ' ondragover="event.preventDefault(); this.classList.add(\'ring-2\',\'ring-blue-400\')"'
+        + ' ondragleave="this.classList.remove(\'ring-2\',\'ring-blue-400\')"'
+        + ' ondrop="handleKanbanDrop(event,\'' + safeStatus + '\')">'
+        + '<div class="flex items-center justify-between mb-3 px-1">'
+        + '<div class="flex items-center gap-2">'
+        + '<i class="fas ' + cfg.icon + ' text-sm"></i>'
+        + '<span class="font-semibold text-gray-800 text-sm">' + status + '</span>'
+        + '</div>'
+        + '<div class="flex items-center gap-1">'
+        + '<span class="text-xs ' + cfg.badge + ' px-2 py-0.5 rounded-full font-medium">' + colTasks.length + '</span>'
+        + addBtn
+        + '</div>'
+        + '</div>'
+        + '<div class="space-y-2 min-h-12" id="kanban-col-' + status.replace(/\s+/g, '_') + '">'
+        + cardsHTML
+        + '</div>'
+        + '</div>';
     }).join('');
   }
 
