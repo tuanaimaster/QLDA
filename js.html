@@ -5908,6 +5908,9 @@
       })
       .withFailureHandler(function (err) { showToast('Lỗi: ' + err.message, 'error'); })
       .getUserProfileData(currentUser ? currentUser.email : '');
+  }
+
+  // base64 của avatar mới đang được chọn
   let _pendingAvatarBase64 = null;
 
   function onAvatarFileSelected(event) {
