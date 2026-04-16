@@ -156,56 +156,62 @@
   }
 
   function handleSuccessfulLogin(dataResponse) {
-    currentUser = dataResponse.user;
-    isAuthenticated = true;
+    try {
+      currentUser = dataResponse.user;
+      isAuthenticated = true;
 
-    // Lưu token để dùng cho mọi server call sau này
-    if (dataResponse.token) {
-      currentToken = dataResponse.token;
-      localStorage.setItem('qlda_tok', currentToken);
-    }
-
-    allProjects = dataResponse.projects || [];
-    allTasks = dataResponse.tasks || [];
-    allStaff = dataResponse.staff || [];
-
-    updateUIForUser(currentUser);
-
-    // Render UI ngay lập tức
-    renderStats(dataResponse.summaryStats);
-    renderProjects();
-    renderTasks();
-    renderStaff();
-    renderChart(dataResponse.chartData);
-    renderProjectProgressChart();
-    renderTaskPriorityChart();
-    renderTimelineProgressChart();
-    renderProjectComparisonChart();
-    renderStaffPerformanceChart();
-    renderActivity(dataResponse.recentActivities);
-    renderPriorityTasksMini();
-    renderTaskStats();
-    renderProjectStats();
-
-    setupGanttEventListeners();
-    if (currentSection === 'gantt') {
-      renderGanttChart();
-    }
-
-    // Load leaderboard in Overview
-    loadLeaderboard('leaderboard-overview');
-
-    // Hook achievements button (may render after login)
-    setTimeout(() => {
-      document.getElementById('view-my-achievements-btn')?.addEventListener('click', showMyAchievementsModal);
-    }, 200);
-
-    // ← THÊM: Load chat async sau 500ms để UI render xong trước
-    setTimeout(() => {
-      if (currentSection === 'overview') {
-        loadChatMessagesAsync();
+      // Lưu token để dùng cho mọi server call sau này
+      if (dataResponse.token) {
+        currentToken = dataResponse.token;
+        localStorage.setItem('qlda_tok', currentToken);
       }
-    }, 500);
+
+      allProjects = dataResponse.projects || [];
+      allTasks = dataResponse.tasks || [];
+      allStaff = dataResponse.staff || [];
+
+      // Render dữ liệu cốt lõi trước để tránh trang bị treo khi một module phụ lỗi
+      renderStats(dataResponse.summaryStats);
+      renderProjects();
+      renderTasks();
+      renderStaff();
+      renderTaskStats();
+      renderProjectStats();
+
+      // Các phần phụ tách try/catch để không chặn phần cốt lõi
+      try { updateUIForUser(currentUser); } catch (e) { console.error('updateUIForUser error:', e); }
+      try { renderChart(dataResponse.chartData); } catch (e) { console.error('renderChart error:', e); }
+      try { renderProjectProgressChart(); } catch (e) { console.error('renderProjectProgressChart error:', e); }
+      try { renderTaskPriorityChart(); } catch (e) { console.error('renderTaskPriorityChart error:', e); }
+      try { renderTimelineProgressChart(); } catch (e) { console.error('renderTimelineProgressChart error:', e); }
+      try { renderProjectComparisonChart(); } catch (e) { console.error('renderProjectComparisonChart error:', e); }
+      try { renderStaffPerformanceChart(); } catch (e) { console.error('renderStaffPerformanceChart error:', e); }
+      try { renderActivity(dataResponse.recentActivities || []); } catch (e) { console.error('renderActivity error:', e); }
+      try { renderPriorityTasksMini(); } catch (e) { console.error('renderPriorityTasksMini error:', e); }
+
+      setupGanttEventListeners();
+      if (currentSection === 'gantt') {
+        try { renderGanttChart(); } catch (e) { console.error('renderGanttChart error:', e); }
+      }
+
+      // Load leaderboard in Overview
+      try { loadLeaderboard('leaderboard-overview'); } catch (e) { console.error('loadLeaderboard error:', e); }
+
+      // Hook achievements button (may render after login)
+      setTimeout(() => {
+        document.getElementById('view-my-achievements-btn')?.addEventListener('click', showMyAchievementsModal);
+      }, 200);
+
+      // ← THÊM: Load chat async sau 500ms để UI render xong trước
+      setTimeout(() => {
+        if (currentSection === 'overview') {
+          loadChatMessagesAsync();
+        }
+      }, 500);
+    } catch (e) {
+      console.error('handleSuccessfulLogin fatal error:', e);
+      showToast('Đã đăng nhập nhưng lỗi khi hiển thị dữ liệu. Vui lòng tải lại trang.', 'error');
+    }
   }
 
   function loadChatMessagesAsync() {
@@ -3964,7 +3970,7 @@
         setButtonLoading(submitBtn, false);
         showToast('Lỗi: ' + error.message, 'error');
       })
-      [apiMethod](id, newName);
+      [apiMethod](id, newName, currentToken);
   }
 
   function renderTaskPriorityChart() {
