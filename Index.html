@@ -1049,17 +1049,17 @@
 
           <!-- Kanban Columns -->
           <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" id="kanban-board">
-            <!-- Column: Chưa bắt đầu -->
+            <!-- Column: Nhiệm vụ -->
             <div class="kanban-column" data-status="Chưa bắt đầu">
               <div class="kanban-column-header kanban-header-gray">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <span class="kanban-dot bg-gray-400"></span>
-                    <span class="font-semibold text-sm text-gray-700">Chưa bắt đầu</span>
+                    <span class="font-semibold text-sm text-gray-700">Nhiệm vụ</span>
                   </div>
                   <div class="flex items-center gap-2">
                     <span class="kanban-count-badge bg-gray-100 text-gray-600" id="kanban-count-0">0</span>
-                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Chưa bắt đầu')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
+                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Nhiệm vụ')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
                   </div>
                 </div>
               </div>
@@ -1091,6 +1091,25 @@
               </div>
             </div>
 
+            <!-- Column: Tạm dừng | Quá hạn -->
+            <div class="kanban-column" data-status="Tạm dừng">
+              <div class="kanban-column-header kanban-header-amber">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="kanban-dot bg-red-400"></span>
+                    <span class="font-semibold text-sm text-amber-700">Tạm dừng <span class="text-red-500">| Quá hạn</span></span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="kanban-count-badge bg-amber-100 text-amber-700" id="kanban-count-2">0</span>
+                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Tạm dừng|Quá hạn')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
+                  </div>
+                </div>
+              </div>
+              <div class="kanban-cards sortable-list" id="kanban-col-2" data-status="Tạm dừng">
+                <div class="kanban-empty-state">Không có nhiệm vụ</div>
+              </div>
+            </div>
+
             <!-- Column: Hoàn thành -->
             <div class="kanban-column" data-status="Hoàn thành">
               <div class="kanban-column-header kanban-header-green">
@@ -1100,31 +1119,12 @@
                     <span class="font-semibold text-sm text-emerald-700">Hoàn thành</span>
                   </div>
                   <div class="flex items-center gap-2">
-                    <span class="kanban-count-badge bg-emerald-100 text-emerald-700" id="kanban-count-2">0</span>
+                    <span class="kanban-count-badge bg-emerald-100 text-emerald-700" id="kanban-count-3">0</span>
                     <button class="kanban-add-btn" onclick="openKanbanAddTask('Hoàn thành')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
                   </div>
                 </div>
               </div>
-              <div class="kanban-cards sortable-list" id="kanban-col-2" data-status="Hoàn thành">
-                <div class="kanban-empty-state">Không có nhiệm vụ</div>
-              </div>
-            </div>
-
-            <!-- Column: Tạm dừng -->
-            <div class="kanban-column" data-status="Tạm dừng">
-              <div class="kanban-column-header kanban-header-amber">
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <span class="kanban-dot bg-amber-400"></span>
-                    <span class="font-semibold text-sm text-amber-700">Tạm dừng</span>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <span class="kanban-count-badge bg-amber-100 text-amber-700" id="kanban-count-3">0</span>
-                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Tạm dừng')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
-                  </div>
-                </div>
-              </div>
-              <div class="kanban-cards sortable-list" id="kanban-col-3" data-status="Tạm dừng">
+              <div class="kanban-cards sortable-list" id="kanban-col-3" data-status="Hoàn thành">
                 <div class="kanban-empty-state">Không có nhiệm vụ</div>
               </div>
             </div>

@@ -2811,13 +2811,77 @@ const TG_NAME_COL = 'Tên hiển thị';
 const TG_DATE_COL = 'Ngày đăng ký';
 
 /**
- * Kiểm tra và trao thành tích sau khi hoàn thành task
+ * ══════════════════════════════════════════════════════════════
+ *  HỆ THỐNG THÀNH TÍCH & ĐIỂM KINH NGHIỆM (DUOLINGO-INSPIRED)
+ * ══════════════════════════════════════════════════════════════
+ *
+ * CẤP ĐỘ (Level / League):
+ *   🥉 Đồng     (Bronze)   :      0 – 199  pts
+ *   🥈 Bạc      (Silver)   :    200 – 499  pts
+ *   🥇 Vàng     (Gold)     :    500 – 1499 pts
+ *   💎 Bạch Kim (Platinum)  :  1500 – 2999 pts
+ *   🔮 Kim Cương (Diamond) :  3000 – 5999 pts
+ *   👑 Huyền Thoại (Legend):   6000+       pts
+ *
+ * ĐIỂM NHIỆM VỤ:
+ *   +10  hoàn thành 1 nhiệm vụ (được giao cho mình)
+ *   +20  nhiệm vụ mình giao cho người khác → họ hoàn thành
+ *   +50  hoàn thành nhiệm vụ trước hạn (Early Bird)
+ *   +30  hoàn thành nhiệm vụ ưu tiên Cao
+ *
+ * STREAK (liên tiếp mỗi ngày ≥ 1 task):
+ *   +100  streak  3 ngày
+ *   +300  streak  7 ngày   (tuần lễ hoàn hảo)
+ *   +700  streak  7 ngày   BONUS (tổng 1000 cho tuần)
+ *   +2100 streak 21 ngày   BONUS
+ *   +500  streak 30 ngày
+ *   +1000 streak 60 ngày
+ *
+ * MILESTONE NHIỆM VỤ:
+ *   +50    1 task (first blood)
+ *   +100   10 tasks
+ *   +300   30 tasks
+ *   +500   50 tasks
+ *   +1000  100 tasks
+ *
+ * DỰ ÁN:
+ *   +500   là thành viên dự án → dự án hoàn thành
+ *   +1000  là PM dự án → dự án hoàn thành
+ *
+ * THÀNH TÍCH ĐẶC BIỆT (badges):
+ *   🏃 Siêu năng suất  : 5 tasks/ngày          +200
+ *   📋 Nhà quản lý     : 10 tasks giao→hoàn thành +300
+ *   🔄 Không bỏ cuộc  : hoàn thành task quá hạn  +50  (mỗi lần)
+ *   ⚡ Tốc độ sét      : hoàn thành trước hạn ≥5 tasks +150
  */
-function checkAndAwardAchievements(assigneeName, taskId, taskData) {
+
+// ── Level definition ──────────────────────────────────────────────────────────
+function getLevelInfo(totalPoints) {
+  const levels = [
+    { min: 0,    max: 199,  label: 'Đồng',       emoji: '🥉', color: '#cd7f32' },
+    { min: 200,  max: 499,  label: 'Bạc',        emoji: '🥈', color: '#9ca3af' },
+    { min: 500,  max: 1499, label: 'Vàng',       emoji: '🥇', color: '#f59e0b' },
+    { min: 1500, max: 2999, label: 'Bạch Kim',   emoji: '💎', color: '#7c3aed' },
+    { min: 3000, max: 5999, label: 'Kim Cương',  emoji: '🔮', color: '#06b6d4' },
+    { min: 6000, max: Infinity, label: 'Huyền Thoại', emoji: '👑', color: '#f97316' },
+  ];
+  const lv = levels.find(l => totalPoints >= l.min && totalPoints <= l.max) || levels[0];
+  const next = levels[levels.indexOf(lv) + 1];
+  const progress = next ? Math.round(((totalPoints - lv.min) / (next.min - lv.min)) * 100) : 100;
+  return { ...lv, totalPoints, nextMin: next ? next.min : null, progress };
+}
+
+/**
+ * Kiểm tra và trao thành tích sau khi hoàn thành task
+ * @param {string} assigneeName  - Tên người thực hiện task
+ * @param {string} taskId
+ * @param {object} taskData      - Row object của task
+ * @param {string} [assignerName] - Tên người giao task (nếu khác assigneeName)
+ */
+function checkAndAwardAchievements(assigneeName, taskId, taskData, assignerName) {
   try {
     if (!assigneeName) return [];
 
-    // Tìm Mã NV từ tên
     const staff = getStaffList();
     const staffMember = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === assigneeName);
     if (!staffMember) return [];
@@ -2829,113 +2893,114 @@ function checkAndAwardAchievements(assigneeName, taskId, taskData) {
       ACH_POINTS_COL, ACH_DATE_COL, ACH_DESC_COL
     ]);
 
-    // Lấy tất cả thành tích hiện có của nhân viên này
     const allAch = sheetDataToObjectArray(achSheet);
-    const myAch = allAch.filter(a => a[ACH_STAFF_COL] === staffId);
+    const myAch  = allAch.filter(a => a[ACH_STAFF_COL] === staffId);
     const myTypes = new Set(myAch.map(a => a[ACH_TYPE_COL]));
 
-    // Đếm tasks hoàn thành của nhân viên này
-    const allTasks = getTasks();
-    const myCompletedTasks = allTasks.filter(t =>
+    const allTasksList = getTasks();
+    const myCompleted = allTasksList.filter(t =>
       t[TASK_ASSIGNEE_COLUMN_NAME] === assigneeName &&
       t[TASK_STATUS_COLUMN_NAME] === 'Hoàn thành'
     );
-    const completedCount = myCompletedTasks.length;
+    const completedCount = myCompleted.length;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     const newAchievements = [];
 
-    // 1. First Task - hoàn thành task đầu tiên
-    if (completedCount === 1 && !myTypes.has('FIRST_TASK')) {
-      newAchievements.push({
-        type: 'FIRST_TASK',
-        title: '🎯 Bước đầu tiên',
-        points: 10,
-        desc: 'Hoàn thành nhiệm vụ đầu tiên!',
-      });
+    // ── Helper: push achievement if not already earned ───────────────────
+    function award(type, title, points, desc) {
+      if (!myTypes.has(type)) newAchievements.push({ type, title, points, desc });
+    }
+    // Repeatable (awarded every time condition met)
+    function awardRepeat(type, title, points, desc) {
+      newAchievements.push({ type, title, points, desc });
     }
 
-    // 2. Fast Finisher - hoàn thành trước hạn
-    const dueDate = taskData && taskData[TASK_DUE_DATE_COLUMN_NAME] ? parseDate(taskData[TASK_DUE_DATE_COLUMN_NAME]) : null;
-    if (dueDate && today <= dueDate && !myTypes.has('FAST_FINISHER')) {
-      newAchievements.push({
-        type: 'FAST_FINISHER',
-        title: '⚡ Tốc độ ánh sáng',
-        points: 15,
-        desc: 'Hoàn thành nhiệm vụ trước hạn!',
-      });
+    // ── 1. Base points per task (+10) ────────────────────────────────────
+    awardRepeat('TASK_DONE', '✅ Hoàn thành nhiệm vụ', 10, `Hoàn thành: ${taskData[TASK_NAME_COLUMN_NAME] || taskId}`);
+
+    // ── 2. High-priority task (+30) ──────────────────────────────────────
+    if ((taskData[TASK_PRIORITY_COLUMN_NAME] || '').toLowerCase().includes('cao')) {
+      awardRepeat('TASK_HIGH', '🔴 Nhiệm vụ ưu tiên cao', 30, 'Hoàn thành task ưu tiên Cao!');
     }
 
-    // 3. Milestone 10 tasks
-    if (completedCount >= 10 && !myTypes.has('MILESTONE_10')) {
-      newAchievements.push({
-        type: 'MILESTONE_10',
-        title: '🏆 Chiến binh 10',
-        points: 30,
-        desc: 'Hoàn thành 10 nhiệm vụ!',
-      });
+    // ── 3. Early Bird: hoàn thành trước hạn (+50) ────────────────────────
+    const dueDate = taskData[TASK_DUE_DATE_COLUMN_NAME] ? parseDate(taskData[TASK_DUE_DATE_COLUMN_NAME]) : null;
+    if (dueDate && today < dueDate) {
+      awardRepeat('EARLY_BIRD', '⚡ Hoàn thành trước hạn', 50, 'Hoàn thành nhiệm vụ trước deadline!');
     }
 
-    // 4. Milestone 50 tasks
-    if (completedCount >= 50 && !myTypes.has('MILESTONE_50')) {
-      newAchievements.push({
-        type: 'MILESTONE_50',
-        title: '👑 Huyền thoại',
-        points: 100,
-        desc: 'Hoàn thành 50 nhiệm vụ!',
-      });
+    // ── 4. Rescuer: hoàn thành task đã quá hạn (+30) ─────────────────────
+    if (dueDate && today > dueDate) {
+      awardRepeat('RESCUER', '🔄 Không bỏ cuộc', 30, 'Hoàn thành nhiệm vụ dù đã quá hạn!');
     }
 
-    // 5. Streak - kiểm tra ngày liên tiếp
-    const completedDates = myCompletedTasks
-      .map(t => t[TASK_REPORT_DATE_COLUMN_NAME])
-      .filter(d => d)
-      .map(d => {
-        const parsed = parseDate(d);
-        return parsed ? formatSheetDate(parsed) : null;
-      })
+    // ── 5. Assigner bonus (+20) – caller passes assignerName ─────────────
+    if (assignerName && assignerName !== assigneeName) {
+      const assignerMember = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === assignerName);
+      if (assignerMember) {
+        const assignerId = assignerMember[STAFF_ID_COLUMN_NAME];
+        // Award points directly to assigner's sheet
+        const assignerAchCount = allAch.filter(a => a[ACH_STAFF_COL] === assignerId).length;
+        const newId = `ACH${String(allAch.length + assignerAchCount + 1).padStart(4, '0')}`;
+        achSheet.appendRow([
+          newId, assignerId, 'ASSIGN_DONE',
+          '📋 Nhiệm vụ được giao hoàn thành', 20,
+          formatSheetDate(new Date()),
+          `Task ${taskId} do ${assigneeName} hoàn thành`,
+        ]);
+      }
+    }
+
+    // ── 6. Milestones ────────────────────────────────────────────────────
+    if (completedCount >= 1   && !myTypes.has('M_1'))    award('M_1',   '🎯 Bước đầu tiên',        50,  'Hoàn thành nhiệm vụ đầu tiên!');
+    if (completedCount >= 10  && !myTypes.has('M_10'))   award('M_10',  '🏅 Chiến binh 10',        100, 'Hoàn thành 10 nhiệm vụ!');
+    if (completedCount >= 30  && !myTypes.has('M_30'))   award('M_30',  '🎖️ Dũng sĩ 30',           300, 'Hoàn thành 30 nhiệm vụ!');
+    if (completedCount >= 50  && !myTypes.has('M_50'))   award('M_50',  '🏆 Chiến thần 50',        500, 'Hoàn thành 50 nhiệm vụ!');
+    if (completedCount >= 100 && !myTypes.has('M_100'))  award('M_100', '👑 Huyền thoại 100',      1000,'Hoàn thành 100 nhiệm vụ!');
+
+    // ── 7. Streak ────────────────────────────────────────────────────────
+    const completedDates = myCompleted
+      .map(t => { const p = parseDate(t[TASK_REPORT_DATE_COLUMN_NAME]); return p ? formatSheetDate(p) : null; })
       .filter(d => d);
-
     const uniqueDates = [...new Set(completedDates)].sort();
     const streak = calcStreak(uniqueDates);
 
-    if (streak >= 3 && !myTypes.has('STREAK_3')) {
-      newAchievements.push({
-        type: 'STREAK_3',
-        title: '🔥 Lửa 3 ngày',
-        points: 20,
-        desc: 'Hoàn thành nhiệm vụ 3 ngày liên tiếp!',
-      });
-    }
-    if (streak >= 7 && !myTypes.has('STREAK_7')) {
-      newAchievements.push({
-        type: 'STREAK_7',
-        title: '💎 Kim cương 7 ngày',
-        points: 50,
-        desc: 'Hoàn thành nhiệm vụ 7 ngày liên tiếp!',
-      });
+    if (streak >= 3  && !myTypes.has('STREAK_3'))   award('STREAK_3',  '🔥 Lửa 3 ngày',           100, '3 ngày liên tiếp có task hoàn thành!');
+    if (streak >= 7  && !myTypes.has('STREAK_7'))   award('STREAK_7',  '🔥🔥 Tuần hoàn hảo',       700, '7 ngày liên tiếp – tuần lễ hoàn hảo!');
+    if (streak >= 14 && !myTypes.has('STREAK_14'))  award('STREAK_14', '❄️ Chuỗi 2 tuần',          1000,'14 ngày liên tiếp!');
+    if (streak >= 21 && !myTypes.has('STREAK_21'))  award('STREAK_21', '💎 Chuỗi 3 tuần',          2100,'21 ngày liên tiếp – bất khả chiến bại!');
+    if (streak >= 30 && !myTypes.has('STREAK_30'))  award('STREAK_30', '🌙 Chuỗi 30 ngày',         3000,'30 ngày không gián đoạn!');
+    if (streak >= 60 && !myTypes.has('STREAK_60'))  award('STREAK_60', '☀️ Chuỗi 60 ngày',         6000,'60 ngày – siêu nhân!');
+
+    // ── 8. Daily super-productivity: 5 tasks today (+200) ────────────────
+    const todayStr = formatSheetDate(today);
+    const todayDone = myCompleted.filter(t => {
+      const p = parseDate(t[TASK_REPORT_DATE_COLUMN_NAME]);
+      return p && formatSheetDate(p) === todayStr;
+    }).length;
+    if (todayDone >= 5 && !myTypes.has('SUPER_DAY')) {
+      award('SUPER_DAY', '🏃 Siêu năng suất', 200, '5 nhiệm vụ trong 1 ngày!');
     }
 
-    // Lưu thành tích mới vào sheet
+    // ── 9. Early-bird specialist: ≥5 tasks done before deadline ──────────
+    const earlyCount = myAch.filter(a => a[ACH_TYPE_COL] === 'EARLY_BIRD').length
+      + newAchievements.filter(a => a.type === 'EARLY_BIRD').length;
+    if (earlyCount >= 5 && !myTypes.has('SPEED_DEMON')) {
+      award('SPEED_DEMON', '⚡ Tốc độ sét', 150, 'Hoàn thành ≥5 nhiệm vụ trước deadline!');
+    }
+
+    // ── Save new achievements ─────────────────────────────────────────────
     const existingCount = allAch.length;
     newAchievements.forEach((ach, i) => {
       const newId = `ACH${String(existingCount + i + 1).padStart(4, '0')}`;
       achSheet.appendRow([
-        newId,
-        staffId,
-        ach.type,
-        ach.title,
-        ach.points,
-        formatSheetDate(new Date()),
-        ach.desc,
+        newId, staffId, ach.type, ach.title,
+        ach.points, formatSheetDate(new Date()), ach.desc,
       ]);
     });
 
-    if (newAchievements.length > 0) {
-      SpreadsheetApp.flush();
-    }
+    if (newAchievements.length > 0) SpreadsheetApp.flush();
 
     return newAchievements;
   } catch (e) {
@@ -3022,14 +3087,14 @@ function getMyAchievements() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
     if (!achSheet || achSheet.getLastRow() < 2) {
-      return { success: true, achievements: [], totalPoints: 0 };
+      return { success: true, achievements: [], totalPoints: 0, level: getLevelInfo(0) };
     }
 
     const allAch = sheetDataToObjectArray(achSheet);
     const myAch = staffId ? allAch.filter(a => a[ACH_STAFF_COL] === staffId) : [];
     const totalPoints = myAch.reduce((sum, a) => sum + (parseInt(a[ACH_POINTS_COL], 10) || 0), 0);
 
-    return { success: true, achievements: myAch, totalPoints: totalPoints };
+    return { success: true, achievements: myAch, totalPoints: totalPoints, level: getLevelInfo(totalPoints) };
   } catch (e) {
     console.error('Error in getMyAchievements:', e);
     return { success: false, error: e.message };

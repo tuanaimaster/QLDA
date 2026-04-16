@@ -5458,42 +5458,69 @@
     const projectFilter = document.getElementById('kanban-project-filter')?.value || '';
     const assigneeFilter = document.getElementById('kanban-assignee-filter')?.value || '';
 
-    showKanbanRefreshIndicator(true);
+    // ⚡ Client-side instant render (no server round-trip)
+    const now = new Date(); now.setHours(0, 0, 0, 0);
 
-    google.script.run
-      .withSuccessHandler(function (data) {
-        showKanbanRefreshIndicator(false);
-        if (data.success) {
-          renderKanbanBoard(data);
-          kanbanLastRefreshTime = Date.now();
-          updateKanbanLastUpdated();
-        } else {
-          showToast(data.error || 'Lỗi tải Kanban', 'error');
-        }
-      })
-      .withFailureHandler(function (err) {
-        showKanbanRefreshIndicator(false);
-        showToast('Lỗi kết nối Kanban: ' + err.message, 'error');
-      })
-      .getKanbanData(projectFilter, assigneeFilter);
+    let tasks = allTasks;
+    if (projectFilter)  tasks = tasks.filter(t => t[COL.T_PID] === projectFilter);
+    if (assigneeFilter) tasks = tasks.filter(t => t[COL.T_ASSIGNEE] === assigneeFilter);
+
+    const projectMap = {};
+    allProjects.forEach(p => { projectMap[p[COL.P_ID]] = p[COL.P_NAME] || p[COL.P_ID]; });
+
+    const enriched = tasks.map(t => ({
+      ...t,
+      _projectName: projectMap[t[COL.T_PID]] || t[COL.T_PID] || '',
+      _isOverdue: t[COL.T_DUE] && new Date(t[COL.T_DUE]) < now && t[COL.T_STATUS] !== 'Hoàn thành',
+    }));
+
+    // ─── New 4-column grouping ────────────────────────────────────────────
+    // Col 0: "Nhiệm vụ"          ← status "Chưa bắt đầu" (not overdue)
+    // Col 1: "Đang thực hiện"    ← status "Đang thực hiện" (not overdue)
+    // Col 2: "Tạm dừng|Quá hạn" ← status "Tạm dừng" + any overdue task
+    // Col 3: "Hoàn thành"        ← status "Hoàn thành"
+    const grouped = {
+      'Nhiệm vụ':          [],
+      'Đang thực hiện':    [],
+      'Tạm dừng|Quá hạn': [],
+      'Hoàn thành':        [],
+    };
+
+    enriched.forEach(t => {
+      const status = t[COL.T_STATUS] || 'Chưa bắt đầu';
+      if (status === 'Hoàn thành') {
+        grouped['Hoàn thành'].push(t);
+      } else if (t._isOverdue || status === 'Tạm dừng') {
+        grouped['Tạm dừng|Quá hạn'].push(t);
+      } else if (status === 'Đang thực hiện') {
+        grouped['Đang thực hiện'].push(t);
+      } else {
+        grouped['Nhiệm vụ'].push(t);
+      }
+    });
+
+    renderKanbanBoard({ success: true, grouped });
+    kanbanLastRefreshTime = Date.now();
+    updateKanbanLastUpdated();
   }
 
   function renderKanbanBoard(data) {
-    const colIds = ['kanban-col-0', 'kanban-col-1', 'kanban-col-2', 'kanban-col-3'];
-    const colStatuses = ['Chưa bắt đầu', 'Đang thực hiện', 'Hoàn thành', 'Tạm dừng'];
-    const countIds = ['kanban-count-0', 'kanban-count-1', 'kanban-count-2', 'kanban-count-3'];
+    const colIds     = ['kanban-col-0', 'kanban-col-1', 'kanban-col-2', 'kanban-col-3'];
+    const colKeys    = ['Nhiệm vụ', 'Đang thực hiện', 'Tạm dừng|Quá hạn', 'Hoàn thành'];
+    // data-status on sortable lists → maps to the actual status stored on drag
+    const dropStatus = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
+    const countIds   = ['kanban-count-0', 'kanban-count-1', 'kanban-count-2', 'kanban-count-3'];
 
     // Destroy old sortable instances
     kanbanSortableInstances.forEach(s => s.destroy && s.destroy());
     kanbanSortableInstances = [];
 
-    colStatuses.forEach((status, i) => {
-      const colEl = document.getElementById(colIds[i]);
+    colKeys.forEach((key, i) => {
+      const colEl   = document.getElementById(colIds[i]);
       const countEl = document.getElementById(countIds[i]);
-      const tasks = (data.grouped && data.grouped[status]) ? data.grouped[status] : [];
+      const tasks   = (data.grouped && data.grouped[key]) ? data.grouped[key] : [];
 
       if (countEl) countEl.textContent = tasks.length;
-
       if (!colEl) return;
 
       if (tasks.length === 0) {
@@ -5501,6 +5528,9 @@
       } else {
         colEl.innerHTML = tasks.map(t => buildKanbanCard(t)).join('');
       }
+
+      // Update data-status so drag-drop sends correct status to server
+      colEl.dataset.status = dropStatus[i];
 
       // Init SortableJS
       if (typeof Sortable !== 'undefined') {
@@ -5511,7 +5541,7 @@
           chosenClass: 'sortable-chosen',
           dragClass: 'kanban-drag',
           onEnd: function (evt) {
-            const taskId = evt.item.dataset.taskId;
+            const taskId   = evt.item.dataset.taskId;
             const newStatus = evt.to.dataset.status;
             const oldStatus = evt.from.dataset.status;
             if (taskId && newStatus && newStatus !== oldStatus) {
@@ -5535,10 +5565,11 @@
       : 'priority-none';
 
     const dueDate = task[COL.T_DUE] || '';
-    const isOverdue = dueDate && new Date(dueDate) < new Date() && task[COL.T_STATUS] !== 'Hoàn thành';
+    const isOverdue = task._isOverdue;
     const dueBadge = dueDate
       ? `<span class="kanban-badge kanban-badge-due ${isOverdue ? 'overdue' : ''}">
            <i class="fas fa-calendar-alt"></i> ${formatDisplayDate(dueDate)}
+           ${isOverdue ? ' <span class="kanban-overdue-tag">Quá hạn</span>' : ''}
          </span>`
       : '';
 
@@ -5547,7 +5578,7 @@
     const projectName = task._projectName || task[COL.T_PID] || '';
 
     return `
-      <div class="kanban-card ${priorityClass}"
+      <div class="kanban-card ${priorityClass} ${isOverdue ? 'kanban-card-overdue' : ''}"
            data-task-id="${task[COL.T_ID]}"
            data-status="${task[COL.T_STATUS] || ''}"
            title="${(task[COL.T_NAME] || '').replace(/"/g, '&quot;')}">
@@ -5560,7 +5591,7 @@
         ${completion > 0 ? `
           <div class="kanban-card-progress">
             <div class="kanban-progress-bar">
-              <div class="kanban-progress-fill" style="width:${completion}%"></div>
+              <div class="kanban-progress-fill ${isOverdue ? 'bg-red-400' : ''}" style="width:${completion}%"></div>
             </div>
           </div>
         ` : ''}
@@ -5568,34 +5599,30 @@
   }
 
   function handleKanbanDrop(taskId, newStatus, cardEl) {
-    // Visual feedback: dim card while saving
     cardEl.style.opacity = '0.5';
 
     google.script.run
       .withSuccessHandler(function (result) {
         cardEl.style.opacity = '1';
         if (result.success) {
-          // Update local allTasks cache
+          // Update local cache immediately
           const t = allTasks.find(t => t[COL.T_ID] === taskId);
           if (t) t[COL.T_STATUS] = newStatus;
 
           showToast(`Đã chuyển sang "${newStatus}"`, 'success');
 
-          // Show achievements if any
           if (result.achievements && result.achievements.length > 0) {
             result.achievements.forEach(ach => {
-              showToast(`🏆 Thành tích mới: ${ach.title} (+${ach.points} điểm)`, 'success');
+              showToast(`🏆 ${ach.title} (+${ach.points} điểm)`, 'success');
             });
-            // Refresh leaderboard
             loadLeaderboard('leaderboard-list');
             loadLeaderboard('leaderboard-overview');
           }
 
-          // Refresh allTasks from server (async, don't block)
-          refreshKanbanDataQuiet();
+          // Re-render locally (instant, no server call)
+          loadKanbanData();
         } else {
           showToast(result.error || 'Lỗi cập nhật trạng thái', 'error');
-          // Reload kanban to restore correct state
           loadKanbanData();
         }
       })
@@ -5608,14 +5635,21 @@
   }
 
   // Mở modal thêm nhiệm vụ từ Kanban board, pre-chọn trạng thái cột
-  function openKanbanAddTask(status) {
+  function openKanbanAddTask(displayStatus) {
     if (!isAuthenticated) { showToast('Vui lòng đăng nhập', 'error'); return; }
     if (!canUserCreateTask()) { showToast('Bạn không có quyền tạo nhiệm vụ', 'error'); return; }
+    // Map display name → actual status value stored in sheet
+    const statusMap = {
+      'Nhiệm vụ':          'Chưa bắt đầu',
+      'Tạm dừng|Quá hạn':  'Tạm dừng',
+      'Đang thực hiện':    'Đang thực hiện',
+      'Hoàn thành':        'Hoàn thành',
+    };
+    const actualStatus = statusMap[displayStatus] || displayStatus;
     openModal('task');
-    // Sau khi modal render xong, pre-chọn trạng thái
     setTimeout(function () {
       const statusSelect = document.querySelector('#task-modal select[name="status"]');
-      if (statusSelect) statusSelect.value = status;
+      if (statusSelect) statusSelect.value = actualStatus;
     }, 80);
   }
 
@@ -5738,23 +5772,40 @@
         if (!data.success) { showToast(data.error || 'Lỗi', 'error'); return; }
         const achievements = data.achievements || [];
         const totalPts = data.totalPoints || 0;
+        const lv = data.level || { emoji: '🥉', label: 'Đồng', progress: 0, nextMin: 200 };
+
+        const levelBarHTML = `
+          <div class="mb-5 p-4 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-lg font-bold" style="color:${lv.color || '#cd7f32'}">${lv.emoji} Cấp ${lv.label}</span>
+              <span class="text-sm font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">🏆 ${totalPts} điểm</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div class="h-2.5 rounded-full transition-all" style="width:${lv.progress}%;background:${lv.color || '#cd7f32'}"></div>
+            </div>
+            ${lv.nextMin ? `<p class="text-xs text-gray-500 mt-1.5">Cần thêm <strong>${lv.nextMin - totalPts}</strong> điểm để lên cấp tiếp theo</p>` : '<p class="text-xs text-amber-600 mt-1.5 font-semibold">🎉 Bạn đã đạt cấp cao nhất!</p>'}
+            <div class="flex gap-2 mt-3 flex-wrap text-xs text-gray-500">
+              <span>🥉 Đồng 0</span><span>→</span>
+              <span>🥈 Bạc 200</span><span>→</span>
+              <span>🥇 Vàng 500</span><span>→</span>
+              <span>💎 Bạch Kim 1500</span><span>→</span>
+              <span>🔮 Kim Cương 3000</span><span>→</span>
+              <span>👑 Huyền Thoại 6000</span>
+            </div>
+          </div>`;
 
         const modalHTML = `
           <div id="achievements-modal" class="modal active">
             <div class="modal-content max-w-2xl">
-              <div class="flex items-center justify-between mb-6">
+              <div class="flex items-center justify-between mb-4">
                 <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <i class="fas fa-medal text-amber-500"></i> Thành tích của tôi
                 </h3>
-                <div class="flex items-center gap-4">
-                  <div class="text-sm font-semibold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
-                    🏆 Tổng: ${totalPts} điểm
-                  </div>
-                  <button class="close-modal text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-lg"></i>
-                  </button>
-                </div>
+                <button class="close-modal text-gray-400 hover:text-gray-600">
+                  <i class="fas fa-times text-lg"></i>
+                </button>
               </div>
+              ${levelBarHTML}
               ${achievements.length === 0
                 ? '<div class="text-center text-gray-500 py-12"><i class="fas fa-star text-4xl text-gray-300 mb-3 block"></i>Chưa có thành tích nào. Hoàn thành nhiệm vụ để mở khóa!</div>'
                 : `<div class="achievement-grid">${achievements.map(ach => `
