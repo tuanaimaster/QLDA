@@ -10,7 +10,6 @@
   let currentSection = 'overview';
   let currentUser = null; // Store current logged in user
   let isAuthenticated = false;
-  let currentToken = localStorage.getItem('qlda_tok') || null;
   let draggedItem = null;
   let draggedProjectId = null;
   let currentStatListData = [];
@@ -91,15 +90,15 @@
         showToast('Lỗi kết nối: ' + error.message, 'error');
         showLoginModal();
       })
-      .getInitialDataWithAuth(currentToken);
+      .getInitialDataWithAuth();
   }
 
   function showLoginModal() {
     const loginModal = document.getElementById('login-modal');
     if (loginModal) {
       loginModal.classList.remove('opacity-0', 'invisible');
-      const card = loginModal.querySelector('.bg-white\\/90') || loginModal.firstElementChild;
-      if (card) { card.classList.remove('scale-95'); card.classList.add('scale-100'); }
+      loginModal.querySelector('.bg-white\\/90').classList.remove('scale-95');
+      loginModal.querySelector('.bg-white\\/90').classList.add('scale-100');
 
       // Focus on email input
       setTimeout(() => {
@@ -111,8 +110,8 @@
   function hideLoginModal() {
     const loginModal = document.getElementById('login-modal');
     if (loginModal) {
-      const card = loginModal.querySelector('.bg-white\\/90') || loginModal.firstElementChild;
-      if (card) { card.classList.remove('scale-100'); card.classList.add('scale-95'); }
+      loginModal.querySelector('.bg-white\\/90').classList.remove('scale-100');
+      loginModal.querySelector('.bg-white\\/90').classList.add('scale-95');
 
       setTimeout(() => {
         loginModal.classList.add('opacity-0', 'invisible');
@@ -139,8 +138,21 @@
         if (response.success) {
           hideLoginModal();
           hideLoginError();
-          handleSuccessfulLogin(response);
-          showToast('Đăng nhập thành công!', 'success');
+
+          // Get user data and initialize
+          google.script.run
+            .withSuccessHandler(function (dataResponse) {
+              if (dataResponse.success) {
+                handleSuccessfulLogin(dataResponse);
+                showToast('Đăng nhập thành công!', 'success');
+              } else {
+                showToast(dataResponse.error || 'Lỗi khi tải dữ liệu', 'error');
+              }
+            })
+            .withFailureHandler(function (error) {
+              showToast('Lỗi khi tải dữ liệu: ' + error.message, 'error');
+            })
+            .getDataForUser();
         } else {
           showLoginError(response.error || 'Đăng nhập thất bại');
         }
@@ -156,18 +168,29 @@
   function handleSuccessfulLogin(dataResponse) {
     currentUser = dataResponse.user;
     isAuthenticated = true;
-    if (dataResponse.token) {
-      currentToken = dataResponse.token;
-      localStorage.setItem('qlda_tok', currentToken);
-    }
 
     allProjects = dataResponse.projects || [];
     allTasks = dataResponse.tasks || [];
     allStaff = dataResponse.staff || [];
 
+    // Restore avatar from localStorage if exists
+    var storedUser = null;
+    try { storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) {}
+    if (storedUser && storedUser.email === currentUser.email && storedUser._avatarDataUrl) {
+      currentUser._avatarDataUrl = storedUser._avatarDataUrl;
+    }
+
     updateUIForUser(currentUser);
 
-    // Render UI ngay lập tức
+    // Populate kanban project filter
+    var kanbanFilter = document.getElementById('kanban-project-filter');
+    if (kanbanFilter) {
+      kanbanFilter.innerHTML = '<option value="">Tất cả dự án</option>' +
+        allProjects.map(function(p) { return '<option value="' + p[COL.P_ID] + '">' + p[COL.P_NAME] + '</option>'; }).join('');
+      kanbanFilter.onchange = function() { renderKanban(); };
+    }
+
+    // Render UI
     renderStats(dataResponse.summaryStats);
     renderProjects();
     renderTasks();
@@ -186,9 +209,13 @@
     setupGanttEventListeners();
     if (currentSection === 'gantt') {
       renderGanttChart();
+    } else if (currentSection === 'kanban') {
+      renderKanban();
+    } else if (currentSection === 'achievements') {
+      renderAchievements();
     }
 
-    // ← THÊM: Load chat async sau 500ms để UI render xong trước
+    // Load chat async
     setTimeout(() => {
       if (currentSection === 'overview') {
         loadChatMessagesAsync();
@@ -230,15 +257,28 @@
     const userRole = document.getElementById('user-role');
 
     if (userAvatar && userName && userRole) {
-      const initials = user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+      const initials = (user.name || 'U')
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2);
+      userName.textContent = user.name;
+      userRole.textContent = user.role;
+
+      // Avatar: prefer local cache, then server URL, then initials
       const avatarSrc = user._avatarDataUrl || user.avatar;
       if (avatarSrc) {
-        userAvatar.innerHTML = `<img src="${avatarSrc}" class="w-full h-full object-cover rounded-full" alt="avatar" onerror="this.style.display='none';this.parentElement.textContent='${initials}';" />`;
+        userAvatar.innerHTML = '<img src="' + avatarSrc + '" class="w-full h-full object-cover rounded-full" alt="avatar" ' +
+          'onerror="this.style.display=\'none\';this.parentElement.textContent=\'' + initials + '\'" />';
       } else {
         userAvatar.textContent = initials;
       }
-      userName.textContent = user.name;
-      userRole.textContent = user.role;
+
+      // Make avatar clickable to open profile edit
+      userAvatar.style.cursor = 'pointer';
+      userAvatar.title = 'Nhấp để chỉnh sửa hồ sơ';
+      userAvatar.onclick = function() { showEditProfileModal(); };
     }
 
     // THAY ĐỔI: Kiểm tra xem nhân viên có phải là người phụ trách dự án nào không
@@ -247,12 +287,6 @@
     // Hide/show navigation items based on role
     const projectsNav = document.getElementById('projects-nav');
     const staffNav = document.getElementById('staff-nav');
-    const kanbanNav = document.getElementById('kanban-nav');
-    const achievementsNav = document.getElementById('achievements-nav');
-
-    // Kanban & achievements always visible for authenticated users
-    if (kanbanNav) kanbanNav.style.display = 'flex';
-    if (achievementsNav) achievementsNav.style.display = 'flex';
 
     if (isAdminUser) {
       // Show all nav items for admin
@@ -407,9 +441,6 @@
 
   function handleLogout() {
     if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
-      const tokenToLogout = currentToken;
-      currentToken = null;
-      localStorage.removeItem('qlda_tok');
       // showLoading('Đang đăng xuất...');
 
       google.script.run
@@ -439,7 +470,7 @@
           // hideLoading();
           showToast('Lỗi khi đăng xuất: ' + error.message, 'error');
         })
-        .logout(tokenToLogout);
+        .logout();
     }
   }
 
@@ -514,7 +545,7 @@
           setButtonLoading(submitBtn, false);
           showToast('Lỗi: ' + error.message, 'error');
         })
-        .changePassword(newPassword, confirmPassword, currentToken);
+        .changePassword(newPassword, confirmPassword);
     });
 
     // Setup close handlers
@@ -650,10 +681,6 @@
     document
       .getElementById('change-password-btn')
       ?.addEventListener('click', showChangePasswordModal);
-
-    document
-      .getElementById('edit-profile-btn')
-      ?.addEventListener('click', showEditProfileModal);
 
     // Mobile menu
     document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
@@ -1221,7 +1248,8 @@
     document.querySelectorAll('.nav-link').forEach((link) => {
       link.classList.remove('active');
     });
-    document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
+    var navEl = document.querySelector('[data-section="' + sectionName + '"]');
+    if (navEl) navEl.classList.add('active');
 
     // Update page title
     const titles = {
@@ -1230,7 +1258,7 @@
       tasks: 'Quản lý Nhiệm vụ',
       staff: 'Quản lý Nhân viên',
       gantt: 'Sơ đồ Gantt',
-      kanban: 'Bảng Kanban',
+      kanban: 'Kanban Board',
       achievements: 'Thành tích & Bảng xếp hạng',
     };
     document.getElementById('page-title').textContent = titles[sectionName] || 'Dashboard';
@@ -1239,23 +1267,18 @@
     document.querySelectorAll('.section').forEach((section) => {
       section.classList.remove('active');
     });
-    document.getElementById(`${sectionName}-section`).classList.add('active');
+    var sectionEl = document.getElementById(sectionName + '-section');
+    if (sectionEl) sectionEl.classList.add('active');
 
     currentSection = sectionName;
 
-    // Nếu chuyển sang tab Gantt, render biểu đồ
+    // Render section-specific content
     if (sectionName === 'gantt') {
-      setTimeout(() => {
-        renderGanttChart();
-      }, 10);
-    }
-
-    if (sectionName === 'kanban') {
-      renderKanban();
-    }
-
-    if (sectionName === 'achievements') {
-      renderAchievements();
+      setTimeout(() => { renderGanttChart(); }, 10);
+    } else if (sectionName === 'kanban') {
+      setTimeout(() => { renderKanban(); }, 10);
+    } else if (sectionName === 'achievements') {
+      setTimeout(() => { renderAchievements(); }, 10);
     }
 
     // Close mobile menu if open
@@ -2873,7 +2896,7 @@
         setButtonLoading(submitBtn, false);
         showToast('Lỗi: ' + error.message, 'error');
       })
-      [apiMethod](data, currentToken);
+      [apiMethod](data);
   }
 
   function handleEdit(type, originalData) {
@@ -2969,7 +2992,7 @@
         updateOptimisticUpdate(type, id, originalData);
         showToast('Lỗi: ' + error.message, 'error');
       })
-      [apiMethod](id, data, currentToken);
+      [apiMethod](id, data);
   }
 
   function confirmDelete(type, id, name) {
@@ -3008,7 +3031,7 @@
           if (deleteBtn) setButtonLoading(deleteBtn, false);
           showToast('Lỗi: ' + error.message, 'error');
         })
-        [apiMethod](id, currentToken);
+        [apiMethod](id);
     }
   }
 
@@ -3030,7 +3053,7 @@
         // hideLoading();
         showToast('Lỗi khi tải dữ liệu: ' + error.message, 'error');
       })
-      .getDataForUser(currentToken);
+      .getDataForUser();
   }
 
   // === Button Loading State Management ===
@@ -3941,7 +3964,7 @@
         setButtonLoading(submitBtn, false);
         showToast('Lỗi: ' + error.message, 'error');
       })
-      [apiMethod](id, newName, currentToken);
+      [apiMethod](id, newName);
   }
 
   function renderTaskPriorityChart() {
@@ -4811,7 +4834,7 @@
         sendBtn.disabled = false;
         input.disabled = false;
       })
-      .sendChatMessage(message, currentToken);
+      .sendChatMessage(message);
   }
 
   function handleQuickCompleteTask(e) {
@@ -4889,7 +4912,7 @@
                 checkbox.disabled = false;
                 showToast('Lỗi kết nối: ' + error.message, 'error');
               })
-              .updateTaskWithAuth(taskId, updateData, currentToken);
+              .updateTaskWithAuth(taskId, updateData);
           }
         },
         function () {
@@ -5388,252 +5411,118 @@
   }
 
   // ============================================================
-  //  EDIT PROFILE
+  // === KANBAN BOARD
   // ============================================================
-  function showEditProfileModal() {
-    if (!isAuthenticated || !currentUser) {
-      showToast('Vui lòng đăng nhập', 'error');
-      return;
-    }
-    const modal = document.getElementById('edit-profile-modal');
-    if (!modal) return;
+  var KANBAN_STATUSES = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
+  var KANBAN_STATUS_CONFIG = {
+    'Chưa bắt đầu': { color: 'bg-gray-100 border-gray-300', header: 'bg-gray-200 text-gray-700', badge: 'bg-gray-400' },
+    'Đang thực hiện': { color: 'bg-blue-50 border-blue-300', header: 'bg-blue-200 text-blue-800', badge: 'bg-blue-500' },
+    'Tạm dừng': { color: 'bg-amber-50 border-amber-300', header: 'bg-amber-200 text-amber-800', badge: 'bg-amber-500' },
+    'Hoàn thành': { color: 'bg-green-50 border-green-300', header: 'bg-green-200 text-green-800', badge: 'bg-green-500' }
+  };
 
-    // Populate basic fields
-    document.getElementById('profile-name').value = currentUser.name || '';
-    document.getElementById('profile-position').value = currentUser.position || '';
-    document.getElementById('profile-email').value = currentUser.email || '';
-    document.getElementById('profile-phone').value = currentUser.phone || '';
-    document.getElementById('profile-birthday').value = currentUser.birthday || '';
-    document.getElementById('profile-department').value = currentUser.department || '';
-    document.getElementById('profile-bio').value = currentUser.bio || '';
-
-    // Avatar display
-    const avatarDisplay = document.getElementById('profile-avatar-display');
-    if (avatarDisplay) {
-      const initials = (currentUser.name || '?').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
-      const avatarSrc = currentUser._avatarDataUrl || currentUser.avatar;
-      if (avatarSrc) {
-        avatarDisplay.innerHTML = `<img src="${avatarSrc}" class="w-full h-full object-cover" alt="avatar" onerror="this.style.display='none';this.parentElement.textContent='${initials}';" />`;
-      } else {
-        avatarDisplay.textContent = initials;
-      }
-    }
-
-    // Stats bar
-    const statsBar = document.getElementById('profile-stats-bar');
-    if (statsBar) {
-      const completedCount = typeof getUserCompletedCount === 'function' ? getUserCompletedCount(currentUser.name) : 0;
-      const badgeCount = typeof getUserBadges === 'function' ? getUserBadges(completedCount).length : 0;
-      const points = typeof getUserPoints === 'function' ? getUserPoints(completedCount) : 0;
-      statsBar.innerHTML = `
-        <div class="text-center px-4 border-r border-gray-100">
-          <div class="text-2xl font-bold text-indigo-600">${completedCount}</div>
-          <div class="text-xs text-gray-400 mt-0.5">Nhiệm vụ</div>
-        </div>
-        <div class="text-center px-4 border-r border-gray-100">
-          <div class="text-2xl font-bold text-amber-500">${badgeCount}</div>
-          <div class="text-xs text-gray-400 mt-0.5">Huy hiệu</div>
-        </div>
-        <div class="text-center px-4">
-          <div class="text-2xl font-bold text-emerald-500">${points}</div>
-          <div class="text-xs text-gray-400 mt-0.5">Điểm XP</div>
-        </div>`;
-    }
-
-    document.getElementById('profile-error').classList.add('hidden');
-    document.getElementById('profile-success').classList.add('hidden');
-    modal.classList.remove('opacity-0', 'invisible');
-    modal.classList.add('opacity-100', 'visible');
-  }
-
-  function closeEditProfileModal() {
-    const modal = document.getElementById('edit-profile-modal');
-    if (!modal) return;
-    modal.classList.remove('opacity-100', 'visible');
-    modal.classList.add('opacity-0', 'invisible');
-  }
-
-  function saveProfile() {
-    const name = (document.getElementById('profile-name').value || '').trim();
-    const position = (document.getElementById('profile-position').value || '').trim();
-    const phone = (document.getElementById('profile-phone').value || '').trim();
-    const birthday = (document.getElementById('profile-birthday').value || '').trim();
-    const department = (document.getElementById('profile-department').value || '').trim();
-    const bio = (document.getElementById('profile-bio').value || '').trim();
-    const errEl = document.getElementById('profile-error');
-    const successEl = document.getElementById('profile-success');
-    const saveBtn = document.getElementById('save-profile-btn');
-
-    errEl.classList.add('hidden');
-    successEl.classList.add('hidden');
-
-    if (!name) {
-      errEl.textContent = 'Họ tên không được để trống';
-      errEl.classList.remove('hidden');
-      return;
-    }
-
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang lưu...';
-
-    google.script.run
-      .withSuccessHandler(function (resp) {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu thay đổi';
-        if (resp.success) {
-          currentUser.name = resp.name || name;
-          currentUser.position = resp.position || position;
-          currentUser.phone = resp.phone !== undefined ? resp.phone : phone;
-          currentUser.birthday = resp.birthday !== undefined ? resp.birthday : birthday;
-          currentUser.department = resp.department !== undefined ? resp.department : department;
-          currentUser.bio = resp.bio !== undefined ? resp.bio : bio;
-          updateUIForUser(currentUser);
-          successEl.textContent = 'Cập nhật hồ sơ thành công!';
-          successEl.classList.remove('hidden');
-          showToast('Hồ sơ đã được cập nhật', 'success');
-          setTimeout(closeEditProfileModal, 1200);
-        } else {
-          errEl.textContent = resp.error || 'Cập nhật thất bại';
-          errEl.classList.remove('hidden');
-        }
-      })
-      .withFailureHandler(function (err) {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu thay đổi';
-        errEl.textContent = 'Lỗi kết nối: ' + err.message;
-        errEl.classList.remove('hidden');
-      })
-      .updateProfile({ name: name, position: position, phone: phone, birthday: birthday, department: department, bio: bio }, currentToken);
-  }
-
-  function uploadAvatarFromInput(input) {
-    if (!input.files || !input.files[0]) return;
-    const file = input.files[0];
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('Ảnh quá lớn, vui lòng chọn ảnh dưới 2MB', 'error');
-      input.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const dataUrl = e.target.result;
-      const base64 = dataUrl.split(',')[1];
-      const mimeType = file.type;
-      const ext = file.name.split('.').pop() || 'jpg';
-      const filename = 'avatar_' + Date.now() + '.' + ext;
-
-      // Show preview immediately
-      const avatarDisplay = document.getElementById('profile-avatar-display');
-      if (avatarDisplay) {
-        avatarDisplay.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover" alt="avatar" />`;
-      }
-
-      // Disable upload button
-      const uploadBtn = document.getElementById('avatar-upload-btn');
-      if (uploadBtn) uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i>';
-
-      google.script.run
-        .withSuccessHandler(function (resp) {
-          if (uploadBtn) uploadBtn.innerHTML = '<i class="fas fa-camera text-xs"></i>';
-          input.value = '';
-          if (resp.success) {
-            currentUser.avatar = resp.avatarUrl;
-            currentUser._avatarDataUrl = dataUrl; // keep local copy as fast preview
-            // Update avatar display in modal too
-            const avatarDisplay = document.getElementById('profile-avatar-display');
-            if (avatarDisplay) avatarDisplay.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover" alt="avatar" />`;
-            updateUIForUser(currentUser);
-            showToast('\u1ea2nh \u0111\u1ea1i di\u1ec7n \u0111\u00e3 \u0111\u01b0\u1ee3c c\u1eadp nh\u1eadt!', 'success');
-          } else {
-            showToast(resp.error || 'Lỗi khi tải ảnh lên', 'error');
-          }
-        })
-        .withFailureHandler(function (err) {
-          if (uploadBtn) uploadBtn.innerHTML = '<i class="fas fa-camera text-xs"></i>';
-          input.value = '';
-          showToast('Lỗi kết nối: ' + err.message, 'error');
-        })
-        .uploadAvatar(base64, mimeType, filename, currentToken);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // ============================================================
-  //  KANBAN BOARD
-  // ============================================================
   function renderKanban() {
-    const board = document.getElementById('kanban-board');
+    var board = document.getElementById('kanban-board');
     if (!board) return;
 
-    const projectFilter = document.getElementById('kanban-project-filter');
-    const selectedPid = projectFilter ? projectFilter.value : '';
+    var projectFilter = document.getElementById('kanban-project-filter');
+    var selectedProject = projectFilter ? projectFilter.value : '';
+    var tasks = selectedProject ? allTasks.filter(function(t) { return t[COL.T_PID] === selectedProject; }) : allTasks;
+    var canAdd = isAuthenticated && canUserCreateTask();
 
-    // Populate project filter
-    if (projectFilter && projectFilter.options.length <= 1) {
-      allProjects.forEach(function (p) {
-        const opt = document.createElement('option');
-        opt.value = p[COL.P_ID];
-        opt.textContent = p[COL.P_NAME];
-        projectFilter.appendChild(opt);
-      });
-      projectFilter.onchange = renderKanban;
+    var html = '';
+    for (var i = 0; i < KANBAN_STATUSES.length; i++) {
+      var status = KANBAN_STATUSES[i];
+      var cfg = KANBAN_STATUS_CONFIG[status] || {};
+      var colTasks = tasks.filter(function(t) { return t[COL.T_STATUS] === status; });
+      var safeStatus = status.replace(/'/g, "\\'");
+
+      var addBtnHtml = '';
+      if (canAdd) {
+        addBtnHtml = '<button onclick="openKanbanAddTask(\'' + safeStatus + '\')" class="text-xs px-2 py-1 rounded bg-white/60 hover:bg-white text-gray-600 hover:text-gray-900 transition-colors" title="Thêm nhiệm vụ">' +
+          '<i class="fas fa-plus"></i>' +
+          '</button>';
+      }
+
+      var cardsHtml = '';
+      if (colTasks.length === 0) {
+        cardsHtml = '<div class="text-center py-8 text-gray-400 text-sm">';
+        if (canAdd) {
+          cardsHtml += '<i class="fas fa-plus-circle text-2xl mb-2 block"></i>';
+          cardsHtml += '<button onclick="openKanbanAddTask(\'' + safeStatus + '\')" class="text-blue-500 hover:underline text-xs">+ Thêm nhiệm vụ</button>';
+        } else {
+          cardsHtml += 'Trống';
+        }
+        cardsHtml += '</div>';
+      } else {
+        for (var j = 0; j < colTasks.length; j++) {
+          cardsHtml += buildKanbanCard(colTasks[j]);
+        }
+      }
+
+      html += '<div class="kanban-col flex-shrink-0 w-72 rounded-2xl border ' + (cfg.color || '') + ' flex flex-col overflow-hidden"' +
+        ' ondragover="event.preventDefault()" ondrop="handleKanbanDrop(event, \'' + safeStatus + '\')">' +
+        '<div class="' + (cfg.header || 'bg-gray-200') + ' px-4 py-3 flex items-center justify-between">' +
+        '<div class="flex items-center gap-2">' +
+        '<span class="w-2.5 h-2.5 rounded-full ' + (cfg.badge || 'bg-gray-400') + '"></span>' +
+        '<span class="font-semibold text-sm">' + status + '</span>' +
+        '<span class="text-xs opacity-70">(' + colTasks.length + ')</span>' +
+        '</div>' +
+        addBtnHtml +
+        '</div>' +
+        '<div class="flex-1 overflow-y-auto p-3 space-y-3 min-h-[200px]" data-status="' + safeStatus + '">' +
+        cardsHtml +
+        '</div>' +
+        '</div>';
     }
 
-    const STATUSES = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
-    const STATUS_CONFIG = {
-      'Chưa bắt đầu': { color: 'bg-gray-100', badge: 'bg-gray-200 text-gray-700', dot: 'bg-gray-400', icon: 'fa-circle text-gray-400' },
-      'Đang thực hiện': { color: 'bg-blue-50', badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: 'fa-play-circle text-blue-500' },
-      'Tạm dừng': { color: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500', icon: 'fa-pause-circle text-amber-500' },
-      'Hoàn thành': { color: 'bg-green-50', badge: 'bg-green-100 text-green-700', dot: 'bg-green-500', icon: 'fa-check-circle text-green-500' },
-    };
+    board.innerHTML = html;
+  }
 
-    let tasks = allTasks;
-    if (selectedPid) tasks = tasks.filter(function (t) { return t[COL.T_PID] === selectedPid; });
+  function buildKanbanCard(task) {
+    var id = task[COL.T_ID] || '';
+    var name = task[COL.T_NAME] || '(Không tên)';
+    var assignee = task[COL.T_ASSIGNEE] || '';
+    var due = formatDateForDisplay(task[COL.T_DUE]);
+    var priority = task[COL.T_PRIORITY] || '';
+    var completion = parseInt(task[COL.T_COMPLETION] || 0);
+    var isOverdue = isTaskOverdue(task[COL.T_DUE]) && !String(task[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành');
+    var priorityClass = getPriorityClass(priority);
+    var project = allProjects.find(function(p) { return p[COL.P_ID] === task[COL.T_PID]; });
+    var projectName = project ? project[COL.P_NAME] : '';
+    var safeId = id.replace(/'/g, "\\'");
 
-    // Role filter — non-admin only sees own tasks
-    if (!isAdmin() && !isManager()) {
-      tasks = tasks.filter(function (t) { return t[COL.T_ASSIGNEE] === currentUser.name; });
-    }
+    var overdueHtml = isOverdue ? '<span class="text-xs text-red-500 font-medium"><i class="fas fa-exclamation-triangle mr-1"></i>Quá hạn</span>' : '';
+    var priorityHtml = priority ? '<span class="text-xs px-2 py-0.5 rounded-full ' + priorityClass + '">' + priority + '</span>' : '';
+    var projectHtml = projectName ? '<div class="text-xs text-gray-400 truncate"><i class="fas fa-folder mr-1"></i>' + projectName + '</div>' : '';
 
-    board.innerHTML = STATUSES.map(function (status) {
-      const cfg = STATUS_CONFIG[status];
-      const colTasks = tasks.filter(function (t) { return (t[COL.T_STATUS] || 'Chưa bắt đầu') === status; });
-      const canAdd = isAuthenticated && canUserCreateTask();
-      const safeStatus = status.replace(/'/g, "\\'");
+    var progressHtml = '<div class="flex items-center gap-2 mt-2">' +
+      '<div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">' +
+      '<div class="h-full ' + (completion === 100 ? 'bg-green-500' : 'bg-blue-500') + ' rounded-full" style="width:' + completion + '%"></div>' +
+      '</div>' +
+      '<span class="text-xs text-gray-500">' + completion + '%</span>' +
+      '</div>';
 
-      // Build add button HTML (no nested backtick)
-      const addBtn = canAdd
-        ? '<button onclick="openKanbanAddTask(\'' + safeStatus + '\')" title="Thêm nhiệm vụ" class="w-6 h-6 flex items-center justify-center rounded-full bg-white/80 hover:bg-white text-gray-500 hover:text-indigo-600 shadow-sm transition-colors text-xs"><i class="fas fa-plus"></i></button>'
-        : '';
-
-      // Build empty state HTML (no nested backtick)
-      const emptyState = canAdd
-        ? '<div class="text-center text-xs text-gray-400 py-6 border-2 border-dashed border-gray-200 rounded-xl"><button onclick="openKanbanAddTask(\'' + safeStatus + '\')" class="text-indigo-400 hover:text-indigo-600 font-medium">+ Thêm nhiệm vụ</button></div>'
-        : '<div class="text-center text-xs text-gray-400 py-4">Kéo thả nhiệm vụ vào đây</div>';
-
-      const cardsHTML = colTasks.map(function (t) { return kanbanCard(t); }).join('') || emptyState;
-
-      return '<div class="kanban-col flex-shrink-0 w-72 ' + cfg.color + ' rounded-2xl p-3 min-h-64"'
-        + ' data-status="' + status + '"'
-        + ' ondragover="event.preventDefault(); this.classList.add(\'ring-2\',\'ring-blue-400\')"'
-        + ' ondragleave="this.classList.remove(\'ring-2\',\'ring-blue-400\')"'
-        + ' ondrop="handleKanbanDrop(event,\'' + safeStatus + '\')">'
-        + '<div class="flex items-center justify-between mb-3 px-1">'
-        + '<div class="flex items-center gap-2">'
-        + '<i class="fas ' + cfg.icon + ' text-sm"></i>'
-        + '<span class="font-semibold text-gray-800 text-sm">' + status + '</span>'
-        + '</div>'
-        + '<div class="flex items-center gap-1">'
-        + '<span class="text-xs ' + cfg.badge + ' px-2 py-0.5 rounded-full font-medium">' + colTasks.length + '</span>'
-        + addBtn
-        + '</div>'
-        + '</div>'
-        + '<div class="space-y-2 min-h-12" id="kanban-col-' + status.replace(/\s+/g, '_') + '">'
-        + cardsHTML
-        + '</div>'
-        + '</div>';
-    }).join('');
+    return '<div class="kanban-card bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer border border-gray-100 hover:border-blue-200"' +
+      ' draggable="true"' +
+      ' data-task-id="' + id + '"' +
+      ' ondragstart="handleKanbanDragStart(event)"' +
+      ' ondblclick="openEditModal(\'task\',\'' + safeId + '\')"' +
+      ' title="Nhấp đúp để chỉnh sửa">' +
+      '<div class="flex justify-between items-start mb-2">' +
+      '<p class="font-semibold text-gray-800 text-sm leading-snug flex-1 pr-2">' + name + '</p>' +
+      '<div class="flex flex-col gap-1 items-end shrink-0">' +
+      priorityHtml +
+      overdueHtml +
+      '</div>' +
+      '</div>' +
+      projectHtml +
+      '<div class="flex items-center justify-between mt-2 text-xs text-gray-500">' +
+      '<span><i class="fas fa-user mr-1"></i>' + (assignee || 'Chưa giao') + '</span>' +
+      '<span><i class="fas fa-calendar mr-1"></i>' + due + '</span>' +
+      '</div>' +
+      progressHtml +
+      '</div>';
   }
 
   function openKanbanAddTask(status) {
@@ -5642,229 +5531,230 @@
       return;
     }
     openModal('task');
-    setTimeout(function () {
-      const statusSelect = document.querySelector('#task-modal select[name="status"]');
-      if (statusSelect) {
-        statusSelect.value = status;
-        // trigger change so completion auto-sets to 100 if Hoàn thành
-        statusSelect.dispatchEvent(new Event('change'));
-      }
-    }, 80);
+    setTimeout(function() {
+      var selects = document.querySelectorAll('#task-modal select, #task-modal-edit select');
+      selects.forEach(function(sel) {
+        if (sel.name === 'status' || sel.id === 'task-status' || (sel.previousElementSibling && sel.previousElementSibling.textContent.includes('Trạng thái'))) {
+          sel.value = status;
+        }
+      });
+    }, 100);
   }
 
-  function kanbanCard(task) {
-    const id = task[COL.T_ID] || '';
-    const name = task[COL.T_NAME] || 'Không có tên';
-    const assignee = task[COL.T_ASSIGNEE] || '';
-    const priority = task[COL.T_PRIORITY] || 'Trung bình';
-    const due = task[COL.T_DUE] ? new Date(task[COL.T_DUE]).toLocaleDateString('vi-VN') : '';
-    const project = allProjects.find(function (p) { return p[COL.P_ID] === task[COL.T_PID]; });
-    const projectName = project ? project[COL.P_NAME] : (task[COL.T_PID] || '');
-    const completion = task[COL.T_COMPLETION] || 0;
-    const priorityColors = { 'Cao': 'bg-red-100 text-red-700', 'Trung bình': 'bg-amber-100 text-amber-700', 'Thấp': 'bg-green-100 text-green-700' };
-    const pColor = priorityColors[priority] || 'bg-gray-100 text-gray-600';
-    const initials = assignee ? assignee.split(' ').map(function (n) { return n[0]; }).join('').toUpperCase().slice(0, 2) : '?';
-    const isDue = due && new Date(task[COL.T_DUE]) < new Date() && task[COL.T_STATUS] !== 'Hoàn thành';
-    return `<div class="kanban-card bg-white rounded-xl p-3 shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
-                 draggable="true"
-                 ondragstart="event.dataTransfer.setData('taskId','${id}'); event.currentTarget.style.opacity='0.5'"
-                 ondragend="event.currentTarget.style.opacity='1'"
-                 ondblclick="openEditModal('task','${id}')"
-                 title="Nhấp đúp để chỉnh sửa"
-                 data-task-id="${id}">
-      <p class="font-medium text-gray-900 text-sm mb-2 line-clamp-2">${name}</p>
-      ${projectName ? `<p class="text-xs text-blue-600 mb-2 truncate"><i class="fas fa-folder mr-1"></i>${projectName}</p>` : ''}
-      <div class="flex items-center justify-between mt-2">
-        <span class="text-xs ${pColor} px-2 py-0.5 rounded-full">${priority}</span>
-        ${due ? `<span class="text-xs ${isDue ? 'text-red-500 font-medium' : 'text-gray-400'}"><i class="fas fa-calendar-alt mr-1"></i>${due}</span>` : ''}
-      </div>
-      ${completion > 0 ? `<div class="mt-2"><div class="flex items-center justify-between mb-1"><span class="text-xs text-gray-500">Tiến độ</span><span class="text-xs font-medium text-gray-700">${completion}%</span></div><div class="w-full bg-gray-100 rounded-full h-1.5"><div class="h-1.5 ${completion >= 100 ? 'bg-green-500' : 'bg-blue-500'} rounded-full" style="width:${completion}%"></div></div></div>` : ''}
-      <div class="flex items-center mt-2">
-        <div class="w-6 h-6 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">${initials}</div>
-        <span class="text-xs text-gray-500 ml-1.5 truncate">${assignee || 'Chưa gán'}</span>
-      </div>
-    </div>`;
+  function handleKanbanDragStart(event) {
+    event.dataTransfer.setData('text/plain', event.target.closest('[data-task-id]').dataset.taskId);
   }
 
   function handleKanbanDrop(event, newStatus) {
     event.preventDefault();
-    const col = event.currentTarget;
-    col.classList.remove('ring-2', 'ring-blue-400');
-    const taskId = event.dataTransfer.getData('taskId');
-    if (!taskId) return;
-    const task = allTasks.find(function (t) { return t[COL.T_ID] === taskId; });
+    var taskId = event.dataTransfer.getData('text/plain');
+    if (!taskId || !isAuthenticated) return;
+
+    var task = allTasks.find(function(t) { return t[COL.T_ID] === taskId; });
     if (!task || task[COL.T_STATUS] === newStatus) return;
 
-    const oldStatus = task[COL.T_STATUS];
-    task[COL.T_STATUS] = newStatus; // Optimistic update
-    renderKanban();
-
-    const updateData = {};
-    Object.keys(task).forEach(function (k) { updateData[k] = task[k]; });
-    updateData[COL.T_STATUS] = newStatus;
-    if (newStatus === 'Hoàn thành') updateData[COL.T_COMPLETION] = 100;
-
+    showToast('Đang cập nhật trạng thái...', 'info');
     google.script.run
-      .withSuccessHandler(function (resp) {
+      .withSuccessHandler(function(resp) {
         if (resp && resp.success) {
           task[COL.T_STATUS] = newStatus;
-          if (newStatus === 'Hoàn thành') task[COL.T_COMPLETION] = 100;
-          renderTasks();
-          renderTaskStats();
-          renderStats();
-          showToast(`Nhiệm vụ đã chuyển sang "${newStatus}"`, 'success');
-          if (newStatus === 'Hoàn thành') {
-            checkAndShowAchievementToast();
-          }
-        } else {
-          task[COL.T_STATUS] = oldStatus;
           renderKanban();
-          showToast(resp ? resp.error : 'Lỗi cập nhật', 'error');
+          showToast('Đã cập nhật: ' + newStatus, 'success');
+        } else {
+          showToast('Lỗi: ' + (resp ? resp.error : 'Không rõ'), 'error');
         }
       })
-      .withFailureHandler(function (err) {
-        task[COL.T_STATUS] = oldStatus;
-        renderKanban();
-        showToast('Lỗi kết nối: ' + err.message, 'error');
+      .withFailureHandler(function(err) {
+        showToast('Lỗi kết nối', 'error');
       })
-      .updateTaskWithAuth(taskId, updateData, currentToken);
+      .updateTaskWithAuth(taskId, { 'Trạng thái': newStatus });
   }
 
   // ============================================================
-  //  ACHIEVEMENT SYSTEM
+  // === PROFILE / AVATAR
   // ============================================================
-  var BADGE_DEFS = [
-    { id: 'first', icon: '🌱', name: 'Khởi động', desc: 'Hoàn thành nhiệm vụ đầu tiên', min: 1, points: 10 },
-    { id: 'three', icon: '⚡', name: 'Đang lên', desc: 'Hoàn thành 3 nhiệm vụ', min: 3, points: 25 },
-    { id: 'five', icon: '🔥', name: 'Cháy rực', desc: 'Hoàn thành 5 nhiệm vụ', min: 5, points: 50 },
-    { id: 'ten', icon: '💎', name: 'Xuất sắc', desc: 'Hoàn thành 10 nhiệm vụ', min: 10, points: 100 },
-    { id: 'twenty', icon: '👑', name: 'Huyền thoại', desc: 'Hoàn thành 20 nhiệm vụ', min: 20, points: 200 },
-    { id: 'fifty', icon: '🚀', name: 'Siêu nhân', desc: 'Hoàn thành 50 nhiệm vụ', min: 50, points: 500 },
-  ];
+  function showEditProfileModal() {
+    if (!currentUser) { showToast('Chưa đăng nhập', 'error'); return; }
 
-  function getUserCompletedCount(userName) {
-    return allTasks.filter(function (t) {
-      return t[COL.T_ASSIGNEE] === userName && t[COL.T_STATUS] === 'Hoàn thành';
-    }).length;
+    var avatarSrc = (currentUser._avatarDataUrl || currentUser.avatar) || '';
+    var initials = (currentUser.name || 'U').split(' ').map(function(n) { return n[0]; }).join('').toUpperCase().slice(0, 2);
+
+    var avatarHtml;
+    if (avatarSrc) {
+      avatarHtml = '<img id="profile-avatar-img" src="' + avatarSrc + '" class="w-full h-full object-cover rounded-full" alt="avatar" ' +
+        'onerror="this.style.display=\'none\';document.getElementById(\'profile-avatar-fallback\').style.display=\'flex\'" />' +
+        '<div id="profile-avatar-fallback" class="w-full h-full flex items-center justify-center text-2xl font-bold text-white" style="display:none">' + initials + '</div>';
+    } else {
+      avatarHtml = '<div class="w-full h-full flex items-center justify-center text-2xl font-bold text-white">' + initials + '</div>';
+    }
+
+    var html = '<div id="profile-modal" class="modal-overlay fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">' +
+      '<div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">' +
+      '<div class="flex justify-between items-center mb-6">' +
+      '<h2 class="text-xl font-bold text-gray-900">Chỉnh sửa hồ sơ</h2>' +
+      '<button onclick="document.getElementById(\'profile-modal\').remove()" class="p-2 hover:bg-gray-100 rounded-full"><i class="fas fa-times text-gray-500"></i></button>' +
+      '</div>' +
+      '<div class="flex flex-col items-center mb-6">' +
+      '<div id="profile-avatar-display" class="w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center overflow-hidden cursor-pointer relative">' +
+      avatarHtml +
+      '<div class="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity" onclick="document.getElementById(\'avatar-file-input\').click()">' +
+      '<i class="fas fa-camera text-white text-xl"></i>' +
+      '</div>' +
+      '</div>' +
+      '<input type="file" id="avatar-file-input" accept="image/*" class="hidden" onchange="uploadAvatarFromInput(this)" />' +
+      '<p class="text-xs text-gray-500 mt-2">Nhấp vào ảnh để thay đổi avatar</p>' +
+      '</div>' +
+      '<div class="space-y-4">' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Họ tên</label><input type="text" id="profile-name" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.name || '') + '" /></div>' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Chức vụ</label><input type="text" id="profile-position" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.position || '') + '" /></div>' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Điện thoại</label><input type="text" id="profile-phone" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.phone || '') + '" /></div>' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label><input type="date" id="profile-birthday" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.birthday || '') + '" /></div>' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Phòng ban</label><input type="text" id="profile-department" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.department || '') + '" /></div>' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Giới thiệu</label><textarea id="profile-bio" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 h-24 resize-none">' + (currentUser.bio || '') + '</textarea></div>' +
+      '</div>' +
+      '<div class="flex gap-3 mt-6">' +
+      '<button onclick="document.getElementById(\'profile-modal\').remove()" class="flex-1 px-4 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors">Hủy</button>' +
+      '<button onclick="saveProfile()" class="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-lg transition-all">Lưu thay đổi</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+
+    document.getElementById('modals-container').insertAdjacentHTML('beforeend', html);
   }
 
-  function getUserBadges(completedCount) {
-    return BADGE_DEFS.filter(function (b) { return completedCount >= b.min; });
+  function saveProfile() {
+    var data = {
+      name: (document.getElementById('profile-name') || {}).value || '',
+      position: (document.getElementById('profile-position') || {}).value || '',
+      phone: (document.getElementById('profile-phone') || {}).value || '',
+      birthday: (document.getElementById('profile-birthday') || {}).value || '',
+      department: (document.getElementById('profile-department') || {}).value || '',
+      bio: (document.getElementById('profile-bio') || {}).value || ''
+    };
+
+    showToast('Đang lưu hồ sơ...', 'info');
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (resp && resp.success) {
+          Object.assign(currentUser, data);
+          localStorage.setItem('currentUser', JSON.stringify(currentUser));
+          updateUIForUser(currentUser);
+          document.getElementById('profile-modal') && document.getElementById('profile-modal').remove();
+          showToast('Đã cập nhật hồ sơ!', 'success');
+        } else {
+          showToast('Lỗi: ' + (resp ? resp.error : 'Không rõ'), 'error');
+        }
+      })
+      .withFailureHandler(function(e) { showToast('Lỗi kết nối', 'error'); })
+      .updateProfile(data);
   }
 
-  function getUserPoints(completedCount) {
-    var pts = completedCount * 5;
-    getUserBadges(completedCount).forEach(function (b) { pts += b.points; });
-    return pts;
-  }
+  function uploadAvatarFromInput(input) {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { showToast('Ảnh quá lớn (tối đa 5MB)', 'error'); return; }
 
-  function renderAchievements() {
-    if (!currentUser) return;
-    var myCount = getUserCompletedCount(currentUser.name);
-    var myBadges = getUserBadges(myCount);
-    var myPoints = getUserPoints(myCount);
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var dataUrl = e.target.result;
 
-    // My badges panel
-    var badgesEl = document.getElementById('my-badges');
-    if (badgesEl) {
-      if (myBadges.length === 0) {
-        badgesEl.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Hoàn thành nhiệm vụ đầu tiên để nhận huy chương!</p>';
-      } else {
-        badgesEl.innerHTML = myBadges.map(function (b) {
-          return `<div class="flex items-center gap-3 p-3 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl border border-amber-100">
-            <span class="text-2xl">${b.icon}</span>
-            <div>
-              <p class="font-semibold text-gray-900 text-sm">${b.name}</p>
-              <p class="text-xs text-gray-500">${b.desc}</p>
-            </div>
-            <span class="ml-auto text-xs font-bold text-amber-600">+${b.points}pt</span>
-          </div>`;
-        }).join('');
+      // Preview immediately
+      var display = document.getElementById('profile-avatar-display');
+      if (display) {
+        display.innerHTML = '<img src="' + dataUrl + '" class="w-full h-full object-cover rounded-full" alt="preview" />' +
+          '<div class="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity" onclick="document.getElementById(\'avatar-file-input\').click()">' +
+          '<i class="fas fa-camera text-white text-xl"></i>' +
+          '</div>';
       }
-    }
 
-    var pointsEl = document.getElementById('my-points');
-    if (pointsEl) pointsEl.textContent = myPoints;
-
-    // Progress panel
-    var progressEl = document.getElementById('achievement-progress');
-    if (progressEl) {
-      progressEl.innerHTML = BADGE_DEFS.map(function (b) {
-        var pct = Math.min(100, Math.round((myCount / b.min) * 100));
-        var unlocked = myCount >= b.min;
-        return `<div>
-          <div class="flex items-center justify-between mb-1">
-            <div class="flex items-center gap-1.5">
-              <span class="text-sm">${b.icon}</span>
-              <span class="text-xs font-medium ${unlocked ? 'text-gray-900' : 'text-gray-500'}">${b.name}</span>
-            </div>
-            <span class="text-xs ${unlocked ? 'text-green-600 font-bold' : 'text-gray-400'}">${unlocked ? '✅ Đã đạt' : myCount + '/' + b.min}</span>
-          </div>
-          <div class="w-full bg-gray-100 rounded-full h-2">
-            <div class="h-2 ${unlocked ? 'bg-green-500' : 'bg-blue-500'} rounded-full transition-all" style="width:${pct}%"></div>
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    // Leaderboard
-    var leaderEl = document.getElementById('leaderboard');
-    if (leaderEl) {
-      var staffStats = allStaff.map(function (s) {
-        var name = s[COL.S_NAME];
-        var cnt = getUserCompletedCount(name);
-        return { name: name, count: cnt, points: getUserPoints(cnt), badges: getUserBadges(cnt) };
-      }).sort(function (a, b) { return b.points - a.points; });
-
-      leaderEl.innerHTML = staffStats.slice(0, 10).map(function (s, i) {
-        var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
-        var isMe = s.name === currentUser.name;
-        return `<div class="flex items-center gap-3 p-2.5 ${isMe ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50'} rounded-xl transition-colors">
-          <span class="text-lg w-7 text-center">${medal}</span>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-gray-900 truncate">${s.name}${isMe ? ' <span class="text-xs text-blue-500">(bạn)</span>' : ''}</p>
-            <p class="text-xs text-gray-500">${s.count} nhiệm vụ · ${s.points} điểm</p>
-          </div>
-          ${s.badges.length > 0 ? `<span class="text-sm">${s.badges[s.badges.length - 1].icon}</span>` : ''}
-        </div>`;
-      }).join('');
-    }
+      showToast('Đang tải ảnh lên...', 'info');
+      var base64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          if (resp && resp.success) {
+            currentUser.avatar = resp.avatarUrl;
+            currentUser._avatarDataUrl = dataUrl;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            updateUIForUser(currentUser);
+            showToast('Đã cập nhật avatar!', 'success');
+          } else {
+            showToast('Lỗi upload: ' + (resp ? resp.error : 'Không rõ'), 'error');
+          }
+        })
+        .withFailureHandler(function(e) { showToast('Lỗi kết nối khi upload', 'error'); })
+        .uploadAvatar(base64, file.type);
+    };
+    reader.readAsDataURL(file);
   }
 
-  var _lastAchievementBadgeId = null;
+  // ============================================================
+  // === ACHIEVEMENTS
+  // ============================================================
+  function renderAchievements() {
+    var grid = document.getElementById('achievements-grid');
+    if (!grid) return;
 
-  function checkAndShowAchievementToast() {
-    if (!currentUser) return;
-    var count = getUserCompletedCount(currentUser.name);
-    var badges = getUserBadges(count);
-    if (badges.length === 0) return;
-    var topBadge = badges[badges.length - 1];
-    if (topBadge.id === _lastAchievementBadgeId) return;
+    var BADGES = [
+      { key: 'newbie', icon: '🌱', label: 'Mới bắt đầu', min: 10 },
+      { key: 'active', icon: '⚡', label: 'Năng động', min: 25 },
+      { key: 'fire', icon: '🔥', label: 'Nhiệt huyết', min: 50 },
+      { key: 'diamond', icon: '💎', label: 'Xuất sắc', min: 100 },
+      { key: 'king', icon: '👑', label: 'Huyền thoại', min: 200 },
+      { key: 'rocket', icon: '🚀', label: 'Siêu sao', min: 500 }
+    ];
 
-    // Check if it's a newly unlocked badge (exactly at threshold)
-    var justUnlocked = BADGE_DEFS.find(function (b) { return b.min === count; });
-    if (justUnlocked) {
-      _lastAchievementBadgeId = justUnlocked.id;
-      showAchievementToast(justUnlocked);
+    function getPoints(staffName) {
+      var done = allTasks.filter(function(t) {
+        var isDone = String(t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành');
+        return isDone && t[COL.T_ASSIGNEE] === staffName;
+      });
+      var pts = done.length * 5;
+      var today = new Date();
+      done.forEach(function(t) {
+        var due = t[COL.T_DUE] ? new Date(t[COL.T_DUE]) : null;
+        var reportDate = t[COL.T_REPORT_DATE] ? new Date(t[COL.T_REPORT_DATE]) : null;
+        if (due && reportDate && reportDate <= due) pts += 3;
+      });
+      var created = allTasks.filter(function(t) { return t[COL.T_ASSIGNEE] === staffName; });
+      pts += Math.min(created.length, 10); // cap tạo nhiệm vụ ở 10
+      return pts;
     }
+
+    function getBadge(pts) {
+      var badge = null;
+      for (var i = BADGES.length - 1; i >= 0; i--) {
+        if (pts >= BADGES[i].min) { badge = BADGES[i]; break; }
+      }
+      return badge;
+    }
+
+    var ranked = allStaff.map(function(s) {
+      var name = s[COL.S_NAME] || s['Họ tên'] || '';
+      var pts = getPoints(name);
+      var badge = getBadge(pts);
+      return { name: name, pts: pts, badge: badge, role: s[COL.S_ROLE] || s['Phân quyền'] || '' };
+    }).sort(function(a, b) { return b.pts - a.pts; });
+
+    if (ranked.length === 0) {
+      grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400">Chưa có dữ liệu thành tích</div>';
+      return;
+    }
+
+    var html = '';
+    for (var i = 0; i < ranked.length; i++) {
+      var r = ranked[i];
+      var rankClass = i === 0 ? 'border-yellow-400 bg-yellow-50' : i === 1 ? 'border-gray-400 bg-gray-50' : i === 2 ? 'border-amber-600 bg-amber-50' : 'border-gray-200 bg-white';
+      var rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1);
+      var badgeHtml = r.badge ? ('<div class="text-3xl mb-1">' + r.badge.icon + '</div><div class="text-xs text-gray-500">' + r.badge.label + '</div>') : '<div class="text-xs text-gray-400">Chưa có huy chương</div>';
+      html += '<div class="glass-card border-2 ' + rankClass + ' flex flex-col items-center p-6">' +
+        '<div class="text-2xl font-bold mb-2">' + rankIcon + '</div>' +
+        '<div class="font-semibold text-gray-900 text-center mb-1">' + r.name + '</div>' +
+        '<div class="text-xs text-gray-500 mb-3">' + r.role + '</div>' +
+        badgeHtml +
+        '<div class="mt-3 text-lg font-bold text-blue-600">' + r.pts + ' ⭐</div>' +
+        '</div>';
+    }
+    grid.innerHTML = html;
   }
 
-  function showAchievementToast(badge) {
-    var toast = document.getElementById('achievement-toast');
-    var titleEl = document.getElementById('achievement-toast-title');
-    var descEl = document.getElementById('achievement-toast-desc');
-    var iconEl = document.getElementById('achievement-toast-icon');
-    if (!toast) return;
-    iconEl.textContent = badge.icon;
-    titleEl.textContent = '🎉 Huy chương mới: ' + badge.name;
-    descEl.textContent = badge.desc + ' · +' + badge.points + ' điểm';
-    toast.style.pointerEvents = 'auto';
-    toast.classList.remove('translate-y-20', 'opacity-0');
-    toast.classList.add('translate-y-0', 'opacity-100');
-    setTimeout(function () {
-      toast.classList.remove('translate-y-0', 'opacity-100');
-      toast.classList.add('translate-y-20', 'opacity-0');
-      toast.style.pointerEvents = 'none';
-    }, 4000);
-  }
 </script>

@@ -1,13 +1,5 @@
 ﻿// code.gs
 // === CẤU HÌNH CHUNG ===
-
-// === SPREADSHEET CONFIG ===
-const SPREADSHEET_ID = '11xvZ_QYO94o-LUY9aGPQ00Nu0y1ALjKfJr8VW8AIme8';
-
-function getSpreadsheet() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
-}
-
 // Tên các sheet trong Google Spreadsheet
 const TASK_SHEET_NAME = 'Nhiệm vụ';
 const PROJECT_SHEET_NAME = 'Dự án/Nhiệm vụ';
@@ -75,7 +67,7 @@ const CHAT_JSON_COLUMN_NAME = 'Chat JSON';
  * Phục vụ giao diện HTML khi truy cập URL ứng dụng web.
  */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('Index')
+  return HtmlService.createTemplateFromFile('index')
     .evaluate()
     .setTitle('Quản Lý Dự Án')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -97,13 +89,13 @@ function include(filename) {
  */
 function getInitialDataFast() {
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const spreadsheetId = ss.getId();
 
     // Batch get tất cả sheets cùng lúc
     const ranges = [
       `'${PROJECT_SHEET_NAME}'!A:I`, // Projects với tất cả columns
-      `'${STAFF_SHEET_NAME}'!A:Z`, // Staff (all columns including extended profile)
+      `'${STAFF_SHEET_NAME}'!A:F`, // Staff
     ];
 
     const response = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
@@ -178,7 +170,7 @@ function authenticateUser(email, password) {
       return { success: false, error: 'Email và mật khẩu là bắt buộc' };
     }
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
 
     if (!staffSheet) {
@@ -214,46 +206,22 @@ function authenticateUser(email, password) {
       const userPassword = String(row[passwordColIndex] || '').trim();
 
       if (userEmail === email.toLowerCase() && userPassword === password) {
-        const phoneIdx = headers.indexOf(STAFF_PHONE_COLUMN_NAME);
-        const birthdayIdx = headers.indexOf(STAFF_BIRTHDAY_COLUMN_NAME);
-        const deptIdx = headers.indexOf(STAFF_DEPARTMENT_COLUMN_NAME);
-        const bioIdx = headers.indexOf(STAFF_BIO_COLUMN_NAME);
-        const avatarIdx = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
         const userData = {
           id: row[idColIndex] || '',
           name: row[nameColIndex] || '',
           email: row[emailColIndex] || '',
           role: row[roleColIndex] || 'Nhân viên',
           position: row[headers.indexOf(STAFF_POSITION_COLUMN_NAME)] || '',
-          phone: phoneIdx >= 0 ? (row[phoneIdx] || '') : '',
-          birthday: birthdayIdx >= 0 ? (row[birthdayIdx] || '') : '',
-          department: deptIdx >= 0 ? (row[deptIdx] || '') : '',
-          bio: bioIdx >= 0 ? (row[bioIdx] || '') : '',
-          avatar: avatarIdx >= 0 ? (row[avatarIdx] || '') : '',
         };
 
         // Store session
-        const sessionToken = storeUserSession(userData);
+        storeUserSession(userData);
 
-        // Return full data in one response to eliminate second server call
-        try {
-          const fullData = getDataForUser(sessionToken);
-          return {
-            success: true,
-            user: userData,
-            token: sessionToken,
-            projects: fullData.projects || [],
-            tasks: fullData.tasks || [],
-            staff: fullData.staff || [],
-            chartData: fullData.chartData || {},
-            recentActivities: fullData.recentActivities || [],
-            summaryStats: fullData.summaryStats || {},
-            message: 'Đăng nhập thành công',
-          };
-        } catch (dataErr) {
-          console.error('Error loading data after auth:', dataErr);
-          return { success: true, user: userData, token: sessionToken, message: 'Đăng nhập thành công' };
-        }
+        return {
+          success: true,
+          user: userData,
+          message: 'Đăng nhập thành công',
+        };
       }
     }
 
@@ -270,29 +238,57 @@ function authenticateUser(email, password) {
 
 function storeUserSession(userData) {
   try {
-    const token = Utilities.getUuid();
-    const sessionData = { ...userData, loginTime: new Date().toISOString(), sessionId: token };
-    PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(sessionData));
-    return token;
+    const sessionData = {
+      ...userData,
+      loginTime: new Date().toISOString(),
+      sessionId: Utilities.getUuid(),
+    };
+
+    // THAY ĐỔI: Sử dụng email làm key để phân biệt session từng user
+    const sessionKey = `user_session_${userData.email}`;
+    PropertiesService.getScriptProperties().setProperty(sessionKey, JSON.stringify(sessionData));
+
+    // Lưu thêm current session key để logout
+    const currentUserKey = `current_user_${Session.getTemporaryActiveUserKey()}`;
+    PropertiesService.getScriptProperties().setProperty(currentUserKey, userData.email);
   } catch (e) {
     console.error('Error storing session:', e);
-    return null;
   }
 }
 
 /**
  * Get current user session
  */
-function getCurrentUser(token) {
+function getCurrentUser() {
   try {
-    if (!token) return null;
-    const sessionString = PropertiesService.getScriptProperties().getProperty('tok_' + token);
-    if (!sessionString) return null;
-    const sessionData = JSON.parse(sessionString);
-    if (new Date() - new Date(sessionData.loginTime) > 24 * 60 * 60 * 1000) {
-      PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
+    // Lấy email của user hiện tại từ session key
+    const currentUserKey = `current_user_${Session.getTemporaryActiveUserKey()}`;
+    const userEmail = PropertiesService.getScriptProperties().getProperty(currentUserKey);
+
+    if (!userEmail) {
       return null;
     }
+
+    const sessionKey = `user_session_${userEmail}`;
+    const sessionString = PropertiesService.getScriptProperties().getProperty(sessionKey);
+
+    if (!sessionString) {
+      return null;
+    }
+
+    const sessionData = JSON.parse(sessionString);
+
+    // Check if session is still valid (24 hours)
+    const loginTime = new Date(sessionData.loginTime);
+    const now = new Date();
+    const sessionDuration = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+    if (now - loginTime > sessionDuration) {
+      // Session expired
+      logout();
+      return null;
+    }
+
     return sessionData;
   } catch (e) {
     console.error('Error getting current user:', e);
@@ -303,9 +299,21 @@ function getCurrentUser(token) {
 /**
  * Logout user
  */
-function logout(token) {
+function logout() {
   try {
-    if (token) PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
+    // Lấy email của user hiện tại
+    const currentUserKey = `current_user_${Session.getTemporaryActiveUserKey()}`;
+    const userEmail = PropertiesService.getScriptProperties().getProperty(currentUserKey);
+
+    if (userEmail) {
+      // Xóa session của user này
+      const sessionKey = `user_session_${userEmail}`;
+      PropertiesService.getScriptProperties().deleteProperty(sessionKey);
+    }
+
+    // Xóa current user key
+    PropertiesService.getScriptProperties().deleteProperty(currentUserKey);
+
     return { success: true, message: 'Đăng xuất thành công' };
   } catch (e) {
     console.error('Error during logout:', e);
@@ -336,9 +344,9 @@ function isManager(user) {
 /**
  * Get filtered data based on user role
  */
-function getDataForUser(token) {
+function getDataForUser() {
   try {
-    const currentUser = getCurrentUser(token);
+    const currentUser = getCurrentUser();
 
     if (!currentUser) {
       return {
@@ -493,14 +501,18 @@ function getDataForUser(token) {
 /**
  * Updated addProject with permission check
  */
-function addProjectWithAuth(projectData, token) {
-  const permissionCheck = checkUserPermission('create', 'project', null, token);
+function addProjectWithAuth(projectData) {
+  const permissionCheck = checkUserPermission('create', 'project');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
 
-  return addProject(projectData, token);
+  return addProject(projectData);
 }
+
+/**
+ * Updated updateProject with permission check
+ */
 function updateProjectWithAuth(projectId, projectData) {
   // LẤY DỮ LIỆU DỰ ÁN GỐC TRƯỚC KHI KIỂM TRA QUYỀN
   const projects = getProjects();
@@ -542,8 +554,8 @@ function deleteProjectWithAuth(projectId) {
 /**
  * Updated addTask with permission check
  */
-function addTaskWithAuth(taskData, token) {
-  const permissionCheck = checkUserPermission('create', 'task', null, token);
+function addTaskWithAuth(taskData) {
+  const permissionCheck = checkUserPermission('create', 'task');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -554,11 +566,12 @@ function addTaskWithAuth(taskData, token) {
 /**
  * Updated updateTask with permission check
  */
-function updateTaskWithAuth(taskId, taskData, token) {
+function updateTaskWithAuth(taskId, taskData) {
+  // Get original task data for permission check
   const tasks = getTasks();
   const originalTask = tasks.find((task) => task[TASK_ID_COLUMN_NAME] === taskId);
 
-  const permissionCheck = checkUserPermission('update', 'task', originalTask, token);
+  const permissionCheck = checkUserPermission('update', 'task', originalTask);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -569,11 +582,12 @@ function updateTaskWithAuth(taskId, taskData, token) {
 /**
  * Updated deleteTask with permission check
  */
-function deleteTaskWithAuth(taskId, token) {
+function deleteTaskWithAuth(taskId) {
+  // Get original task data for permission check
   const tasks = getTasks();
   const originalTask = tasks.find((task) => task[TASK_ID_COLUMN_NAME] === taskId);
 
-  const permissionCheck = checkUserPermission('delete', 'task', originalTask, token);
+  const permissionCheck = checkUserPermission('delete', 'task', originalTask);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -584,8 +598,8 @@ function deleteTaskWithAuth(taskId, token) {
 /**
  * Updated staff functions with permission checks
  */
-function addStaffWithAuth(staffData, token) {
-  const permissionCheck = checkUserPermission('create', 'staff', null, token);
+function addStaffWithAuth(staffData) {
+  const permissionCheck = checkUserPermission('create', 'staff');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -593,8 +607,8 @@ function addStaffWithAuth(staffData, token) {
   return addStaff(staffData);
 }
 
-function updateStaffWithAuth(staffId, staffData, token) {
-  const permissionCheck = checkUserPermission('update', 'staff', null, token);
+function updateStaffWithAuth(staffId, staffData) {
+  const permissionCheck = checkUserPermission('update', 'staff');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -602,8 +616,8 @@ function updateStaffWithAuth(staffId, staffData, token) {
   return updateStaff(staffId, staffData);
 }
 
-function deleteStaffWithAuth(staffId, token) {
-  const permissionCheck = checkUserPermission('delete', 'staff', null, token);
+function deleteStaffWithAuth(staffId) {
+  const permissionCheck = checkUserPermission('delete', 'staff');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -614,8 +628,8 @@ function deleteStaffWithAuth(staffId, token) {
 /**
  * Updated getInitialData to check authentication
  */
-function getInitialDataWithAuth(token) {
-  const currentUser = getCurrentUser(token);
+function getInitialDataWithAuth() {
+  const currentUser = getCurrentUser();
 
   if (!currentUser) {
     return {
@@ -738,15 +752,15 @@ function getInitialDataWithAuth(token) {
   } catch (e) {
     console.error('Error in fast load:', e);
     // Fallback to old method
-    return getDataForUser(token);
+    return getDataForUser();
   }
 }
 
 /**
  * Check user permissions for operations
  */
-function checkUserPermission(action, resourceType, resourceData = null, token = null) {
-  const currentUser = getCurrentUser(token);
+function checkUserPermission(action, resourceType, resourceData = null) {
+  const currentUser = getCurrentUser();
 
   if (!currentUser) {
     return { success: false, error: 'Chưa đăng nhập' };
@@ -889,19 +903,19 @@ function getInitialData() {
 // == QUẢN LÝ DỰ ÁN (PROJECTS) ==
 // ==================================
 
-function addProject(projectData, token) {
+function addProject(projectData) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
 
     // Kiểm tra quyền hạn của người dùng về quản lý dự án
-    const currentUser = getCurrentUser(token);
+    const currentUser = getCurrentUser();
     if (!isAdmin(currentUser) && isManager(currentUser)) {
       // Nếu người dùng là Quản lý, bắt buộc phải chọn chính họ làm quản lý dự án
       projectData.manager = currentUser.name;
     }
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = getOrCreateSheet(ss, PROJECT_SHEET_NAME, [
       PROJECT_ID_COLUMN_NAME,
       PROJECT_NAME_COLUMN_NAME,
@@ -962,7 +976,7 @@ function updateProject(projectId, projectData) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1026,7 +1040,7 @@ function deleteProject(projectId) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1060,7 +1074,7 @@ function deleteProject(projectId) {
 
 function getProjects() {
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!sheet) {
       return [];
@@ -1081,7 +1095,7 @@ function addTask(taskData) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1182,7 +1196,7 @@ function updateTask(taskId, taskData) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1366,7 +1380,7 @@ function deleteTask(taskId) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1428,7 +1442,7 @@ function formatJSONCompact(data) {
 
 function getTasks() {
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) {
       return [];
@@ -1484,7 +1498,7 @@ function addStaff(staffData) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = getOrCreateSheet(ss, STAFF_SHEET_NAME, [
       STAFF_ID_COLUMN_NAME,
       STAFF_NAME_COLUMN_NAME,
@@ -1536,7 +1550,7 @@ function updateStaff(staffId, staffData) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) throw new Error(`Không tìm thấy sheet "${STAFF_SHEET_NAME}".`);
 
@@ -1597,7 +1611,7 @@ function deleteStaff(staffId) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) throw new Error(`Không tìm thấy sheet "${STAFF_SHEET_NAME}".`);
 
@@ -1628,7 +1642,7 @@ function deleteStaff(staffId) {
 
 function getStaffList() {
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!sheet) {
       const newSheet = getOrCreateSheet(ss, STAFF_SHEET_NAME, [
@@ -1742,7 +1756,7 @@ function getSummaryStats(projects, tasks) {
 
 function getRecentActivities() {
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) {
       return [];
@@ -1877,7 +1891,7 @@ function logActivity(action, details, projectId = null) {
       }
     }
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) return;
 
@@ -1916,7 +1930,7 @@ function logActivity(action, details, projectId = null) {
     let user = 'Unknown User';
 
     // Lấy thông tin user
-    const currentUser = getCurrentUser(null);
+    const currentUser = getCurrentUser();
     if (currentUser) {
       user = currentUser.email || currentUser.name || 'Unknown User';
     }
@@ -2012,7 +2026,7 @@ function generateNextId(lastId, prefix, minLength = 3) {
 function checkProjectExists(projectId) {
   if (!projectId) return false;
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) return false;
 
@@ -2067,7 +2081,7 @@ function formatSheetDate(dateValue) {
       return '';
     }
 
-    const timeZone = getSpreadsheet().getSpreadsheetTimeZone();
+    const timeZone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
     return Utilities.formatDate(date, timeZone, 'yyyy-MM-dd');
   } catch (e) {
     console.error('Error formatting date:', dateValue, '-', e);
@@ -2211,8 +2225,8 @@ function deleteAllTriggers() {
 /**
  * Copy project and all its tasks
  */
-function copyProjectWithAuth(projectId, newProjectName, token) {
-  const permissionCheck = checkUserPermission('create', 'project', null, token);
+function copyProjectWithAuth(projectId, newProjectName) {
+  const permissionCheck = checkUserPermission('create', 'project');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -2225,7 +2239,7 @@ function copyProject(projectId, newProjectName) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -2319,8 +2333,8 @@ function generateTaskIdForProject(projectId, taskIndex) {
 /**
  * Copy task
  */
-function copyTaskWithAuth(taskId, newTaskName, token) {
-  const permissionCheck = checkUserPermission('create', 'task', null, token);
+function copyTaskWithAuth(taskId, newTaskName) {
+  const permissionCheck = checkUserPermission('create', 'task');
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -2333,7 +2347,7 @@ function copyTask(taskId, newTaskName) {
   try {
     lock.waitLock(15000);
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -2417,7 +2431,7 @@ function copyTask(taskId, newTaskName) {
 
 function getChatMessages() {
   try {
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const chatSheet = ss.getSheetByName(CHAT_SHEET_NAME);
 
     if (!chatSheet || chatSheet.getLastRow() < 2) {
@@ -2474,17 +2488,17 @@ function getChatMessages() {
   }
 }
 
-function sendChatMessage(message, token) {
+function sendChatMessage(message) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(5000); // ← Giảm timeout từ 10000 xuống 5000
 
-    const currentUser = getCurrentUser(token);
+    const currentUser = getCurrentUser();
     if (!currentUser) {
       return { success: false, error: 'Chưa đăng nhập' };
     }
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const chatSheet = getOrCreateSheet(ss, CHAT_SHEET_NAME, [
       CHAT_ID_COLUMN_NAME,
       CHAT_DATE_COLUMN_NAME,
@@ -2569,144 +2583,10 @@ function formatChatJSON(messages) {
   return '[\n' + formattedMessages.join(',\n') + '\n]';
 }
 
-function updateProfile(profileData, token) {
-  try {
-    const currentUser = getCurrentUser(token);
-    if (!currentUser) {
-      return { success: false, error: 'Chưa đăng nhập' };
-    }
-
-    const newName = (profileData.name || '').trim();
-    if (!newName) {
-      return { success: false, error: 'Họ tên không được để trống' };
-    }
-
-    const ss = getSpreadsheet();
-    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
-    if (!staffSheet) {
-      return { success: false, error: 'Không tìm thấy dữ liệu nhân viên' };
-    }
-
-    const headers = getHeaders(staffSheet);
-    const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
-
-    // Ensure extended columns exist
-    const colMap = {};
-    const colNames = [
-      STAFF_NAME_COLUMN_NAME, STAFF_POSITION_COLUMN_NAME,
-      STAFF_PHONE_COLUMN_NAME, STAFF_BIRTHDAY_COLUMN_NAME,
-      STAFF_DEPARTMENT_COLUMN_NAME, STAFF_BIO_COLUMN_NAME,
-    ];
-    colNames.forEach(function(name) {
-      let idx = headers.indexOf(name);
-      if (idx === -1) {
-        idx = headers.length;
-        staffSheet.getRange(1, idx + 1).setValue(name);
-        headers.push(name);
-      }
-      colMap[name] = idx;
-    });
-
-    const lastRow = staffSheet.getLastRow();
-    for (let row = 2; row <= lastRow; row++) {
-      const userEmail = staffSheet.getRange(row, emailColIndex + 1).getValue();
-      if (userEmail === currentUser.email) {
-        staffSheet.getRange(row, colMap[STAFF_NAME_COLUMN_NAME] + 1).setValue(newName);
-        staffSheet.getRange(row, colMap[STAFF_POSITION_COLUMN_NAME] + 1).setValue((profileData.position || '').trim());
-        staffSheet.getRange(row, colMap[STAFF_PHONE_COLUMN_NAME] + 1).setValue((profileData.phone || '').trim());
-        staffSheet.getRange(row, colMap[STAFF_BIRTHDAY_COLUMN_NAME] + 1).setValue((profileData.birthday || '').trim());
-        staffSheet.getRange(row, colMap[STAFF_DEPARTMENT_COLUMN_NAME] + 1).setValue((profileData.department || '').trim());
-        staffSheet.getRange(row, colMap[STAFF_BIO_COLUMN_NAME] + 1).setValue((profileData.bio || '').trim());
-        SpreadsheetApp.flush();
-
-        // Update session data
-        const updatedUser = Object.assign({}, currentUser, {
-          name: newName,
-          position: (profileData.position || '').trim(),
-          phone: (profileData.phone || '').trim(),
-          birthday: (profileData.birthday || '').trim(),
-          department: (profileData.department || '').trim(),
-          bio: (profileData.bio || '').trim(),
-        });
-        PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(updatedUser));
-
-        return {
-          success: true, message: 'Cập nhật hồ sơ thành công',
-          name: newName,
-          position: updatedUser.position,
-          phone: updatedUser.phone,
-          birthday: updatedUser.birthday,
-          department: updatedUser.department,
-          bio: updatedUser.bio,
-        };
-      }
-    }
-
-    return { success: false, error: 'Không tìm thấy tài khoản' };
-  } catch (e) {
-    console.error('Error updating profile:', e);
-    return { success: false, error: 'Lỗi hệ thống: ' + e.message };
-  }
-}
-
-function uploadAvatar(base64Data, mimeType, filename, token) {
-  try {
-    const currentUser = getCurrentUser(token);
-    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
-
-    if (!base64Data || base64Data.length > 3800000) {
-      return { success: false, error: 'Ảnh quá lớn (tối đa ~2.8MB)' };
-    }
-
-    const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename || 'avatar.jpg');
-
-    // Find or create QLDA_Avatars folder
-    let folder;
-    const folders = DriveApp.getFoldersByName('QLDA_Avatars');
-    folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('QLDA_Avatars');
-
-    const file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    const avatarUrl = 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w300';
-
-    // Save URL to Staff sheet
-    const ss = getSpreadsheet();
-    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
-    if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
-
-    const headers = getHeaders(staffSheet);
-    const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
-    let avatarColIndex = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
-    if (avatarColIndex === -1) {
-      avatarColIndex = headers.length;
-      staffSheet.getRange(1, avatarColIndex + 1).setValue(STAFF_AVATAR_COLUMN_NAME);
-      headers.push(STAFF_AVATAR_COLUMN_NAME);
-    }
-
-    const lastRow = staffSheet.getLastRow();
-    for (let row = 2; row <= lastRow; row++) {
-      const userEmail = staffSheet.getRange(row, emailColIndex + 1).getValue();
-      if (userEmail === currentUser.email) {
-        staffSheet.getRange(row, avatarColIndex + 1).setValue(avatarUrl);
-        SpreadsheetApp.flush();
-        // Update session
-        const updatedUser = Object.assign({}, currentUser, { avatar: avatarUrl });
-        PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(updatedUser));
-        return { success: true, avatarUrl: avatarUrl };
-      }
-    }
-
-    return { success: false, error: 'Không tìm thấy tài khoản' };
-  } catch (e) {
-    console.error('uploadAvatar error:', e);
-    return { success: false, error: e.message };
-  }
-}
-
 // Thêm hàm này vào cuối file code.gs:
-function changePassword(newPassword, confirmPassword, token) {
+function changePassword(newPassword, confirmPassword) {
   try {
-    const currentUser = getCurrentUser(token);
+    const currentUser = getCurrentUser();
     if (!currentUser) {
       return { success: false, error: 'Chưa đăng nhập' };
     }
@@ -2723,7 +2603,7 @@ function changePassword(newPassword, confirmPassword, token) {
       return { success: false, error: 'Mật khẩu phải có ít nhất 3 ký tự' };
     }
 
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) {
       return { success: false, error: 'Không tìm thấy dữ liệu nhân viên' };
@@ -2755,7 +2635,7 @@ function reorderTasks(projectId, orderedTaskIds) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    const ss = getSpreadsheet();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
 
     const headers = getHeaders(projectSheet);
@@ -2805,5 +2685,144 @@ function reorderTasks(projectId, orderedTaskIds) {
     return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
+  }
+}
+
+/**
+ * Update profile info for current user
+ */
+function updateProfile(profileData) {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(STAFF_SHEET_NAME);
+    if (!sheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
+
+    const headers = getHeaders(sheet);
+    const emailIdx = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
+    if (emailIdx === -1) return { success: false, error: 'Cột Email không tồn tại' };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: false, error: 'Không có dữ liệu' };
+
+    const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    let targetRowIndex = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (String(data[i][emailIdx] || '').trim().toLowerCase() === currentUser.email.toLowerCase()) {
+        targetRowIndex = i + 2; // 1-based + header row
+        break;
+      }
+    }
+
+    if (targetRowIndex === -1) return { success: false, error: 'Không tìm thấy nhân viên' };
+
+    // Map of profile fields to column names
+    const fieldMap = {
+      name: STAFF_NAME_COLUMN_NAME,
+      position: STAFF_POSITION_COLUMN_NAME,
+      phone: STAFF_PHONE_COLUMN_NAME,
+      birthday: STAFF_BIRTHDAY_COLUMN_NAME,
+      department: STAFF_DEPARTMENT_COLUMN_NAME,
+      bio: STAFF_BIO_COLUMN_NAME
+    };
+
+    // Update each field
+    Object.keys(fieldMap).forEach(function(field) {
+      if (profileData[field] !== undefined) {
+        const colIdx = headers.indexOf(fieldMap[field]);
+        if (colIdx === -1) {
+          // Auto-create column
+          const newColIdx = headers.length;
+          sheet.getRange(1, newColIdx + 1).setValue(fieldMap[field]);
+          sheet.getRange(targetRowIndex, newColIdx + 1).setValue(profileData[field]);
+        } else {
+          sheet.getRange(targetRowIndex, colIdx + 1).setValue(profileData[field]);
+        }
+      }
+    });
+
+    SpreadsheetApp.flush();
+
+    // Update session
+    if (profileData.name) currentUser.name = profileData.name;
+    if (profileData.position) currentUser.position = profileData.position;
+    storeUserSession(currentUser);
+
+    return { success: true, message: 'Cập nhật hồ sơ thành công' };
+  } catch (e) {
+    console.error('updateProfile error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Upload avatar: receive base64 data, save to Drive, return URL
+ */
+function uploadAvatar(base64Data, mimeType) {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
+
+    // Decode base64 to blob
+    const decoded = Utilities.base64Decode(base64Data.replace(/^data:[^;]+;base64,/, ''));
+    const blob = Utilities.newBlob(decoded, mimeType || 'image/jpeg', 'avatar_' + currentUser.id + '.jpg');
+
+    // Save to Drive folder "QLDA_Avatars"
+    let folder;
+    const folders = DriveApp.getFoldersByName('QLDA_Avatars');
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder('QLDA_Avatars');
+      folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    }
+
+    // Delete old avatar if exists
+    const existing = folder.getFilesByName('avatar_' + currentUser.id + '.jpg');
+    while (existing.hasNext()) existing.next().setTrashed(true);
+
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    const fileId = file.getId();
+    const avatarUrl = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w300';
+
+    // Save to sheet
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(STAFF_SHEET_NAME);
+    if (sheet) {
+      const headers = getHeaders(sheet);
+      const emailIdx = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
+      let avatarColIdx = headers.indexOf(STAFF_AVATAR_COLUMN_NAME);
+
+      if (avatarColIdx === -1) {
+        // Create column
+        avatarColIdx = headers.length;
+        sheet.getRange(1, avatarColIdx + 1).setValue(STAFF_AVATAR_COLUMN_NAME);
+      }
+
+      const lastRow = sheet.getLastRow();
+      if (lastRow >= 2) {
+        const data = sheet.getRange(2, emailIdx + 1, lastRow - 1, 1).getValues();
+        for (let i = 0; i < data.length; i++) {
+          if (String(data[i][0] || '').trim().toLowerCase() === currentUser.email.toLowerCase()) {
+            sheet.getRange(i + 2, avatarColIdx + 1).setValue(avatarUrl);
+            break;
+          }
+        }
+      }
+      SpreadsheetApp.flush();
+    }
+
+    // Update session
+    currentUser.avatar = avatarUrl;
+    storeUserSession(currentUser);
+
+    return { success: true, avatarUrl: avatarUrl };
+  } catch (e) {
+    console.error('uploadAvatar error:', e);
+    return { success: false, error: e.message };
   }
 }
