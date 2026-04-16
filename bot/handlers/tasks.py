@@ -4,6 +4,7 @@ handlers/tasks.py — /mytasks, /donetask, /assign, /addtask (ConversationHandle
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
@@ -280,6 +281,7 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         T_DUE: td.get(T_DUE, ""),
         T_STATUS: "Chưa bắt đầu",
         T_COMPLETION: 0,
+        T_START: date.today().isoformat(),  # track creation date for reports
     }
     db = SheetsDB.get()
     result = db.create_task(td["project_id"], task_data)

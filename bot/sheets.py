@@ -269,7 +269,61 @@ class SheetsDB:
         return [{"name": name, "points": pts} for name, pts in leaderboard]
 
     # ------------------------------------------------------------------
-    # Daily summary
+    # Report summary
+    # ------------------------------------------------------------------
+    def get_report_summary(
+        self,
+        assignee_name: str | None = None,
+        project_id: str | None = None,
+    ) -> dict:
+        """Return comprehensive stats for today's report.
+
+        Args:
+            assignee_name: filter tasks belonging to this person only.
+            project_id: filter tasks belonging to this project only.
+        """
+        today = self._today_str()
+        all_tasks = self.get_all_tasks()
+
+        # Project filter
+        if project_id:
+            all_tasks = [t for t in all_tasks if t.get("_projectId", "") == project_id]
+
+        # Assignee filter
+        if assignee_name:
+            tasks = [
+                t for t in all_tasks
+                if str(t.get(T_ASSIGNEE, "")).strip() == assignee_name.strip()
+            ]
+        else:
+            tasks = all_tasks
+
+        added_today = [t for t in tasks if str(t.get(T_START, "")).startswith(today)]
+        completed_today = [
+            t for t in tasks
+            if str(t.get(T_STATUS, "")) == "Hoàn thành"
+            and str(t.get(T_REPORT_DATE, "")).startswith(today)
+        ]
+        in_progress = [t for t in tasks if str(t.get(T_STATUS, "")) == "Đang thực hiện"]
+        pending = [t for t in tasks if str(t.get(T_STATUS, "")) == "Chưa bắt đầu"]
+        completed_all = [t for t in tasks if str(t.get(T_STATUS, "")) == "Hoàn thành"]
+        paused = [t for t in tasks if str(t.get(T_STATUS, "")) == "Tạm dừng"]
+
+        return {
+            "total": len(tasks),
+            "added_today": len(added_today),
+            "added_today_tasks": added_today,
+            "completed_today": len(completed_today),
+            "completed_today_tasks": completed_today,
+            "in_progress": len(in_progress),
+            "in_progress_tasks": in_progress,
+            "pending": len(pending),
+            "completed_all": len(completed_all),
+            "paused": len(paused),
+        }
+
+    # ------------------------------------------------------------------
+    # Daily summary (legacy — kept for scheduled job fallback)
     # ------------------------------------------------------------------
     def get_daily_summary(self) -> list[dict]:
         """Return tasks completed today, grouped by assignee + telegram_id."""
