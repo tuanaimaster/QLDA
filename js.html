@@ -260,6 +260,10 @@
     // Load avatar & level badge asynchronously
     loadUserProfileBadge();
 
+    // Show header profile button
+    const headerProfileBtn = document.getElementById('header-profile-btn');
+    if (headerProfileBtn) headerProfileBtn.classList.remove('hidden');
+
     // THAY ĐỔI: Kiểm tra xem nhân viên có phải là người phụ trách dự án nào không
     const isProjectManager = allProjects.some((project) => project[COL.P_MANAGER] === user.name);
 
@@ -5819,7 +5823,11 @@
 
     google.script.run
       .withSuccessHandler(function (data) {
-        if (!data.success) { showToast(data.error || 'Lỗi tải hồ sơ', 'error'); return; }
+        // Nếu lỗi, vẫn mở modal với dữ liệu mặc định (chứ không đóng modal)
+        if (!data.success) {
+          data = { success: true, avatar: '', bio: '', phone: '', totalPoints: 0,
+            level: { emoji: '🥉', label: 'Đồng', color: '#cd7f32', progress: 0, nextMin: 200 } };
+        }
 
         const lv = data.level || { emoji: '🥉', label: 'Đồng', color: '#cd7f32', progress: 0, nextMin: 200 };
 

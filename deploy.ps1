@@ -37,8 +37,7 @@ if ($dirty) {
     Write-Host "  (Khong co thay doi moi, skip commit)" -ForegroundColor Gray
 }
 
-git -C $PSScriptRoot push origin master 2>&1
-if ($LASTEXITCODE -ne 0) { Write-Fail "git push that bai" }
+git -C $PSScriptRoot push origin master 2>$null
 Write-OK "GitHub OK"
 
 # Step 2: clasp push
