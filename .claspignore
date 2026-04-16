@@ -1,0 +1,12 @@
+bot/**
+**/.venv/**
+**/node_modules/**
+.git/**
+**/__pycache__/**
+*.pyc
+*.md
+*.txt
+*.csv
+*.bat
+*.ps1
+*.py

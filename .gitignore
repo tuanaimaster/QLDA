@@ -1,0 +1,16 @@
+# Python
+bot/.venv/
+bot/__pycache__/
+bot/**/__pycache__/
+*.pyc
+*.pyo
+
+# Secrets
+bot/.env
+bot/credentials.json
+
+# Logs
+bot/logs/
+
+# Clasp
+.clasp.json
