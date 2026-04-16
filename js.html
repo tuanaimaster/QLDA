@@ -3739,7 +3739,8 @@
                 );
 
                 // Hiển thị tất cả nhiệm vụ nếu dự án kết thúc trong hoặc sau tháng hiện tại
-                if (projectEndDate >= firstDay) {
+                const projectEndValid = !isNaN(projectEndDate.getTime());
+                if (!projectEndValid || projectEndDate >= firstDay) {
                   // Tính toán các giá trị Gantt cho task
                   const taskGanttBarStyle = calculateGanttBarStyle(
                     taskStartDate,
@@ -3817,24 +3818,27 @@
                     </div>
                     
                     <div class="gantt-item-timeline">
-                        ${
-                          isDateInMonth(taskStartDate, currentGanttDate) ||
-                          isDateInMonth(taskEndDate, currentGanttDate) ||
-                          (taskStartDate < firstDay &&
-                            taskEndDate >
-                              new Date(
-                                currentGanttDate.getFullYear(),
-                                currentGanttDate.getMonth() + 1,
-                                0
-                              ))
+                        ${(() => {
+                          const hasValidTaskDates = !isNaN(taskStartDate.getTime()) && !isNaN(taskEndDate.getTime());
+                          const taskInMonth = !hasValidTaskDates ||
+                            isDateInMonth(taskStartDate, currentGanttDate) ||
+                            isDateInMonth(taskEndDate, currentGanttDate) ||
+                            (taskStartDate < firstDay &&
+                              taskEndDate >
+                                new Date(
+                                  currentGanttDate.getFullYear(),
+                                  currentGanttDate.getMonth() + 1,
+                                  0
+                                ));
+                          return taskInMonth
                             ? `<div class="gantt-bar gantt-bar-task ${taskIsOverdue ? 'gantt-bar-overdue' : ''}" style="${taskGanttBarStyle}" data-tooltip="${task[COL.T_NAME]}: ${taskDescription}">
                             <div class="gantt-bar-label">${taskFormattedStartDate} - ${taskFormattedEndDate}: ${taskDescription}</div>
                             <div class="gantt-progress" style="width: ${taskProgressPercent}%"></div>
                         </div>`
                             : `<div class="gantt-non-visible-task" style="height: 20px; display: flex; align-items: center; justify-content: center; color: #666; font-size: 11px; font-style: italic;">
                             ${taskFormattedStartDate} - ${taskFormattedEndDate}: Không hiển thị trong tháng này
-                        </div>`
-                        }
+                        </div>`;
+                        })()}
                     </div>
                   </div>
                 `;
