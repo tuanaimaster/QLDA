@@ -2554,6 +2554,48 @@ function formatChatJSON(messages) {
   return '[\n' + formattedMessages.join(',\n') + '\n]';
 }
 
+function updateProfile(newName, newPosition, token) {
+  try {
+    const currentUser = getCurrentUser(token);
+    if (!currentUser) {
+      return { success: false, error: 'Chưa đăng nhập' };
+    }
+
+    if (!newName || !newName.trim()) {
+      return { success: false, error: 'Họ tên không được để trống' };
+    }
+
+    const ss = getSpreadsheet();
+    const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
+    if (!staffSheet) {
+      return { success: false, error: 'Không tìm thấy dữ liệu nhân viên' };
+    }
+
+    const headers = getHeaders(staffSheet);
+    const emailColIndex = headers.indexOf(STAFF_EMAIL_COLUMN_NAME);
+    const nameColIndex = headers.indexOf(STAFF_NAME_COLUMN_NAME);
+    const positionColIndex = headers.indexOf(STAFF_POSITION_COLUMN_NAME);
+
+    const lastRow = staffSheet.getLastRow();
+    for (let row = 2; row <= lastRow; row++) {
+      const userEmail = staffSheet.getRange(row, emailColIndex + 1).getValue();
+      if (userEmail === currentUser.email) {
+        staffSheet.getRange(row, nameColIndex + 1).setValue(newName.trim());
+        if (positionColIndex >= 0) {
+          staffSheet.getRange(row, positionColIndex + 1).setValue((newPosition || '').trim());
+        }
+        SpreadsheetApp.flush();
+        return { success: true, message: 'Cập nhật hồ sơ thành công', name: newName.trim(), position: (newPosition || '').trim() };
+      }
+    }
+
+    return { success: false, error: 'Không tìm thấy tài khoản' };
+  } catch (e) {
+    console.error('Error updating profile:', e);
+    return { success: false, error: 'Lỗi hệ thống: ' + e.message };
+  }
+}
+
 // Thêm hàm này vào cuối file code.gs:
 function changePassword(newPassword, confirmPassword, token) {
   try {

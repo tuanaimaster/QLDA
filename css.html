@@ -2952,4 +2952,25 @@
       max-width: 140px;
     }
   }
+
+  /* Kanban board */
+  #kanban-board {
+    min-height: 400px;
+  }
+  .kanban-col {
+    transition: box-shadow 0.2s, transform 0.1s;
+  }
+  .kanban-col.ring-2 {
+    transform: scale(1.01);
+  }
+  .kanban-card .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* Achievement toast animation */
+  #achievement-toast {
+    transition: transform 0.5s cubic-bezier(.34,1.56,.64,1), opacity 0.4s ease;
+  }
 </style>

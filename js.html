@@ -247,6 +247,12 @@
     // Hide/show navigation items based on role
     const projectsNav = document.getElementById('projects-nav');
     const staffNav = document.getElementById('staff-nav');
+    const kanbanNav = document.getElementById('kanban-nav');
+    const achievementsNav = document.getElementById('achievements-nav');
+
+    // Kanban & achievements always visible for authenticated users
+    if (kanbanNav) kanbanNav.style.display = 'flex';
+    if (achievementsNav) achievementsNav.style.display = 'flex';
 
     if (isAdminUser) {
       // Show all nav items for admin
@@ -644,6 +650,10 @@
     document
       .getElementById('change-password-btn')
       ?.addEventListener('click', showChangePasswordModal);
+
+    document
+      .getElementById('edit-profile-btn')
+      ?.addEventListener('click', showEditProfileModal);
 
     // Mobile menu
     document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
@@ -1219,7 +1229,9 @@
       projects: 'Quản lý Dự án',
       tasks: 'Quản lý Nhiệm vụ',
       staff: 'Quản lý Nhân viên',
-      gantt: 'Sơ đồ Gantt', // Thêm tiêu đề cho tab Gantt
+      gantt: 'Sơ đồ Gantt',
+      kanban: 'Bảng Kanban',
+      achievements: 'Thành tích & Bảng xếp hạng',
     };
     document.getElementById('page-title').textContent = titles[sectionName] || 'Dashboard';
 
@@ -1233,11 +1245,17 @@
 
     // Nếu chuyển sang tab Gantt, render biểu đồ
     if (sectionName === 'gantt') {
-      // Thêm timeout để đảm bảo DOM được cập nhật trước khi thiết lập event listeners
       setTimeout(() => {
         renderGanttChart();
-        // setupGanttEventListeners() đã được gọi trong renderGanttChart() nên không cần gọi lại ở đây
       }, 10);
+    }
+
+    if (sectionName === 'kanban') {
+      renderKanban();
+    }
+
+    if (sectionName === 'achievements') {
+      renderAchievements();
     }
 
     // Close mobile menu if open
@@ -5364,8 +5382,347 @@
                     </div>
                 </div>
             `;
+  // ============================================================
+  //  EDIT PROFILE
+  // ============================================================
+  function showEditProfileModal() {
+    if (!isAuthenticated || !currentUser) {
+      showToast('Vui lòng đăng nhập', 'error');
+      return;
+    }
+    const modal = document.getElementById('edit-profile-modal');
+    if (!modal) return;
+    document.getElementById('profile-name').value = currentUser.name || '';
+    document.getElementById('profile-position').value = currentUser.position || currentUser.role || '';
+    document.getElementById('profile-email').value = currentUser.email || '';
+    document.getElementById('profile-error').classList.add('hidden');
+    document.getElementById('profile-success').classList.add('hidden');
+    modal.classList.remove('opacity-0', 'invisible');
+    modal.classList.add('opacity-100', 'visible');
+  }
+
+  function closeEditProfileModal() {
+    const modal = document.getElementById('edit-profile-modal');
+    if (!modal) return;
+    modal.classList.remove('opacity-100', 'visible');
+    modal.classList.add('opacity-0', 'invisible');
+  }
+
+  function saveProfile() {
+    const name = (document.getElementById('profile-name').value || '').trim();
+    const position = (document.getElementById('profile-position').value || '').trim();
+    const errEl = document.getElementById('profile-error');
+    const successEl = document.getElementById('profile-success');
+    const saveBtn = document.getElementById('save-profile-btn');
+
+    errEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+
+    if (!name) {
+      errEl.textContent = 'Họ tên không được để trống';
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang lưu...';
+
+    google.script.run
+      .withSuccessHandler(function (resp) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu thay đổi';
+        if (resp.success) {
+          currentUser.name = resp.name || name;
+          currentUser.position = resp.position || position;
+          updateUIForUser(currentUser);
+          successEl.textContent = 'Cập nhật hồ sơ thành công!';
+          successEl.classList.remove('hidden');
+          showToast('Hồ sơ đã được cập nhật', 'success');
+          setTimeout(closeEditProfileModal, 1200);
+        } else {
+          errEl.textContent = resp.error || 'Cập nhật thất bại';
+          errEl.classList.remove('hidden');
         }
       })
-      .join('');
+      .withFailureHandler(function (err) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save mr-2"></i>Lưu thay đổi';
+        errEl.textContent = 'Lỗi kết nối: ' + err.message;
+        errEl.classList.remove('hidden');
+      })
+      .updateProfile(name, position, currentToken);
+  }
+
+  // ============================================================
+  //  KANBAN BOARD
+  // ============================================================
+  function renderKanban() {
+    const board = document.getElementById('kanban-board');
+    if (!board) return;
+
+    const projectFilter = document.getElementById('kanban-project-filter');
+    const selectedPid = projectFilter ? projectFilter.value : '';
+
+    // Populate project filter
+    if (projectFilter && projectFilter.options.length <= 1) {
+      allProjects.forEach(function (p) {
+        const opt = document.createElement('option');
+        opt.value = p[COL.P_ID];
+        opt.textContent = p[COL.P_NAME];
+        projectFilter.appendChild(opt);
+      });
+      projectFilter.onchange = renderKanban;
+    }
+
+    const STATUSES = ['Chưa bắt đầu', 'Đang thực hiện', 'Tạm dừng', 'Hoàn thành'];
+    const STATUS_CONFIG = {
+      'Chưa bắt đầu': { color: 'bg-gray-100', badge: 'bg-gray-200 text-gray-700', dot: 'bg-gray-400', icon: 'fa-circle text-gray-400' },
+      'Đang thực hiện': { color: 'bg-blue-50', badge: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500', icon: 'fa-play-circle text-blue-500' },
+      'Tạm dừng': { color: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500', icon: 'fa-pause-circle text-amber-500' },
+      'Hoàn thành': { color: 'bg-green-50', badge: 'bg-green-100 text-green-700', dot: 'bg-green-500', icon: 'fa-check-circle text-green-500' },
+    };
+
+    let tasks = allTasks;
+    if (selectedPid) tasks = tasks.filter(function (t) { return t[COL.T_PID] === selectedPid; });
+
+    // Role filter — non-admin only sees own tasks
+    if (!isAdmin() && !isManager()) {
+      tasks = tasks.filter(function (t) { return t[COL.T_ASSIGNEE] === currentUser.name; });
+    }
+
+    board.innerHTML = STATUSES.map(function (status) {
+      const cfg = STATUS_CONFIG[status];
+      const colTasks = tasks.filter(function (t) { return (t[COL.T_STATUS] || 'Chưa bắt đầu') === status; });
+      return `<div class="kanban-col flex-shrink-0 w-72 ${cfg.color} rounded-2xl p-3 min-h-64"
+                   data-status="${status}"
+                   ondragover="event.preventDefault(); this.classList.add('ring-2','ring-blue-400')"
+                   ondragleave="this.classList.remove('ring-2','ring-blue-400')"
+                   ondrop="handleKanbanDrop(event,'${status}')">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <i class="fas ${cfg.icon} text-sm"></i>
+            <span class="font-semibold text-gray-800 text-sm">${status}</span>
+          </div>
+          <span class="text-xs ${cfg.badge} px-2 py-0.5 rounded-full font-medium">${colTasks.length}</span>
+        </div>
+        <div class="space-y-2 min-h-12" id="kanban-col-${status.replace(/\s+/g,'_')}">
+          ${colTasks.map(function (t) { return kanbanCard(t); }).join('') || '<div class="text-center text-xs text-gray-400 py-4">Kéo thả nhiệm vụ vào đây</div>'}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function kanbanCard(task) {
+    const id = task[COL.T_ID] || '';
+    const name = task[COL.T_NAME] || 'Không có tên';
+    const assignee = task[COL.T_ASSIGNEE] || '';
+    const priority = task[COL.T_PRIORITY] || 'Trung bình';
+    const due = task[COL.T_DUE] ? new Date(task[COL.T_DUE]).toLocaleDateString('vi-VN') : '';
+    const project = allProjects.find(function (p) { return p[COL.P_ID] === task[COL.T_PID]; });
+    const projectName = project ? project[COL.P_NAME] : (task[COL.T_PID] || '');
+    const completion = task[COL.T_COMPLETION] || 0;
+    const priorityColors = { 'Cao': 'bg-red-100 text-red-700', 'Trung bình': 'bg-amber-100 text-amber-700', 'Thấp': 'bg-green-100 text-green-700' };
+    const pColor = priorityColors[priority] || 'bg-gray-100 text-gray-600';
+    const initials = assignee ? assignee.split(' ').map(function (n) { return n[0]; }).join('').toUpperCase().slice(0, 2) : '?';
+    const isDue = due && new Date(task[COL.T_DUE]) < new Date() && task[COL.T_STATUS] !== 'Hoàn thành';
+    return `<div class="kanban-card bg-white rounded-xl p-3 shadow-sm border border-gray-100 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                 draggable="true"
+                 ondragstart="event.dataTransfer.setData('taskId','${id}'); event.currentTarget.style.opacity='0.5'"
+                 ondragend="event.currentTarget.style.opacity='1'"
+                 data-task-id="${id}">
+      <p class="font-medium text-gray-900 text-sm mb-2 line-clamp-2">${name}</p>
+      ${projectName ? `<p class="text-xs text-blue-600 mb-2 truncate"><i class="fas fa-folder mr-1"></i>${projectName}</p>` : ''}
+      <div class="flex items-center justify-between mt-2">
+        <span class="text-xs ${pColor} px-2 py-0.5 rounded-full">${priority}</span>
+        ${due ? `<span class="text-xs ${isDue ? 'text-red-500 font-medium' : 'text-gray-400'}"><i class="fas fa-calendar-alt mr-1"></i>${due}</span>` : ''}
+      </div>
+      ${completion > 0 ? `<div class="mt-2"><div class="flex items-center justify-between mb-1"><span class="text-xs text-gray-500">Tiến độ</span><span class="text-xs font-medium text-gray-700">${completion}%</span></div><div class="w-full bg-gray-100 rounded-full h-1.5"><div class="h-1.5 ${completion >= 100 ? 'bg-green-500' : 'bg-blue-500'} rounded-full" style="width:${completion}%"></div></div></div>` : ''}
+      <div class="flex items-center mt-2">
+        <div class="w-6 h-6 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">${initials}</div>
+        <span class="text-xs text-gray-500 ml-1.5 truncate">${assignee || 'Chưa gán'}</span>
+      </div>
+    </div>`;
+  }
+
+  function handleKanbanDrop(event, newStatus) {
+    event.preventDefault();
+    const col = event.currentTarget;
+    col.classList.remove('ring-2', 'ring-blue-400');
+    const taskId = event.dataTransfer.getData('taskId');
+    if (!taskId) return;
+    const task = allTasks.find(function (t) { return t[COL.T_ID] === taskId; });
+    if (!task || task[COL.T_STATUS] === newStatus) return;
+
+    const oldStatus = task[COL.T_STATUS];
+    task[COL.T_STATUS] = newStatus; // Optimistic update
+    renderKanban();
+
+    const updateData = {};
+    Object.keys(task).forEach(function (k) { updateData[k] = task[k]; });
+    updateData[COL.T_STATUS] = newStatus;
+    if (newStatus === 'Hoàn thành') updateData[COL.T_COMPLETION] = 100;
+
+    google.script.run
+      .withSuccessHandler(function (resp) {
+        if (resp && resp.success) {
+          task[COL.T_STATUS] = newStatus;
+          if (newStatus === 'Hoàn thành') task[COL.T_COMPLETION] = 100;
+          renderTasks();
+          renderTaskStats();
+          renderStats();
+          showToast(`Nhiệm vụ đã chuyển sang "${newStatus}"`, 'success');
+          if (newStatus === 'Hoàn thành') {
+            checkAndShowAchievementToast();
+          }
+        } else {
+          task[COL.T_STATUS] = oldStatus;
+          renderKanban();
+          showToast(resp ? resp.error : 'Lỗi cập nhật', 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        task[COL.T_STATUS] = oldStatus;
+        renderKanban();
+        showToast('Lỗi kết nối: ' + err.message, 'error');
+      })
+      .updateTaskWithAuth(taskId, updateData, currentToken);
+  }
+
+  // ============================================================
+  //  ACHIEVEMENT SYSTEM
+  // ============================================================
+  var BADGE_DEFS = [
+    { id: 'first', icon: '🌱', name: 'Khởi động', desc: 'Hoàn thành nhiệm vụ đầu tiên', min: 1, points: 10 },
+    { id: 'three', icon: '⚡', name: 'Đang lên', desc: 'Hoàn thành 3 nhiệm vụ', min: 3, points: 25 },
+    { id: 'five', icon: '🔥', name: 'Cháy rực', desc: 'Hoàn thành 5 nhiệm vụ', min: 5, points: 50 },
+    { id: 'ten', icon: '💎', name: 'Xuất sắc', desc: 'Hoàn thành 10 nhiệm vụ', min: 10, points: 100 },
+    { id: 'twenty', icon: '👑', name: 'Huyền thoại', desc: 'Hoàn thành 20 nhiệm vụ', min: 20, points: 200 },
+    { id: 'fifty', icon: '🚀', name: 'Siêu nhân', desc: 'Hoàn thành 50 nhiệm vụ', min: 50, points: 500 },
+  ];
+
+  function getUserCompletedCount(userName) {
+    return allTasks.filter(function (t) {
+      return t[COL.T_ASSIGNEE] === userName && t[COL.T_STATUS] === 'Hoàn thành';
+    }).length;
+  }
+
+  function getUserBadges(completedCount) {
+    return BADGE_DEFS.filter(function (b) { return completedCount >= b.min; });
+  }
+
+  function getUserPoints(completedCount) {
+    var pts = completedCount * 5;
+    getUserBadges(completedCount).forEach(function (b) { pts += b.points; });
+    return pts;
+  }
+
+  function renderAchievements() {
+    if (!currentUser) return;
+    var myCount = getUserCompletedCount(currentUser.name);
+    var myBadges = getUserBadges(myCount);
+    var myPoints = getUserPoints(myCount);
+
+    // My badges panel
+    var badgesEl = document.getElementById('my-badges');
+    if (badgesEl) {
+      if (myBadges.length === 0) {
+        badgesEl.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">Hoàn thành nhiệm vụ đầu tiên để nhận huy chương!</p>';
+      } else {
+        badgesEl.innerHTML = myBadges.map(function (b) {
+          return `<div class="flex items-center gap-3 p-3 bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl border border-amber-100">
+            <span class="text-2xl">${b.icon}</span>
+            <div>
+              <p class="font-semibold text-gray-900 text-sm">${b.name}</p>
+              <p class="text-xs text-gray-500">${b.desc}</p>
+            </div>
+            <span class="ml-auto text-xs font-bold text-amber-600">+${b.points}pt</span>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    var pointsEl = document.getElementById('my-points');
+    if (pointsEl) pointsEl.textContent = myPoints;
+
+    // Progress panel
+    var progressEl = document.getElementById('achievement-progress');
+    if (progressEl) {
+      progressEl.innerHTML = BADGE_DEFS.map(function (b) {
+        var pct = Math.min(100, Math.round((myCount / b.min) * 100));
+        var unlocked = myCount >= b.min;
+        return `<div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm">${b.icon}</span>
+              <span class="text-xs font-medium ${unlocked ? 'text-gray-900' : 'text-gray-500'}">${b.name}</span>
+            </div>
+            <span class="text-xs ${unlocked ? 'text-green-600 font-bold' : 'text-gray-400'}">${unlocked ? '✅ Đã đạt' : myCount + '/' + b.min}</span>
+          </div>
+          <div class="w-full bg-gray-100 rounded-full h-2">
+            <div class="h-2 ${unlocked ? 'bg-green-500' : 'bg-blue-500'} rounded-full transition-all" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Leaderboard
+    var leaderEl = document.getElementById('leaderboard');
+    if (leaderEl) {
+      var staffStats = allStaff.map(function (s) {
+        var name = s[COL.S_NAME];
+        var cnt = getUserCompletedCount(name);
+        return { name: name, count: cnt, points: getUserPoints(cnt), badges: getUserBadges(cnt) };
+      }).sort(function (a, b) { return b.points - a.points; });
+
+      leaderEl.innerHTML = staffStats.slice(0, 10).map(function (s, i) {
+        var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+        var isMe = s.name === currentUser.name;
+        return `<div class="flex items-center gap-3 p-2.5 ${isMe ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50'} rounded-xl transition-colors">
+          <span class="text-lg w-7 text-center">${medal}</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900 truncate">${s.name}${isMe ? ' <span class="text-xs text-blue-500">(bạn)</span>' : ''}</p>
+            <p class="text-xs text-gray-500">${s.count} nhiệm vụ · ${s.points} điểm</p>
+          </div>
+          ${s.badges.length > 0 ? `<span class="text-sm">${s.badges[s.badges.length - 1].icon}</span>` : ''}
+        </div>`;
+      }).join('');
+    }
+  }
+
+  var _lastAchievementBadgeId = null;
+
+  function checkAndShowAchievementToast() {
+    if (!currentUser) return;
+    var count = getUserCompletedCount(currentUser.name);
+    var badges = getUserBadges(count);
+    if (badges.length === 0) return;
+    var topBadge = badges[badges.length - 1];
+    if (topBadge.id === _lastAchievementBadgeId) return;
+
+    // Check if it's a newly unlocked badge (exactly at threshold)
+    var justUnlocked = BADGE_DEFS.find(function (b) { return b.min === count; });
+    if (justUnlocked) {
+      _lastAchievementBadgeId = justUnlocked.id;
+      showAchievementToast(justUnlocked);
+    }
+  }
+
+  function showAchievementToast(badge) {
+    var toast = document.getElementById('achievement-toast');
+    var titleEl = document.getElementById('achievement-toast-title');
+    var descEl = document.getElementById('achievement-toast-desc');
+    var iconEl = document.getElementById('achievement-toast-icon');
+    if (!toast) return;
+    iconEl.textContent = badge.icon;
+    titleEl.textContent = '🎉 Huy chương mới: ' + badge.name;
+    descEl.textContent = badge.desc + ' · +' + badge.points + ' điểm';
+    toast.style.pointerEvents = 'auto';
+    toast.classList.remove('translate-y-20', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+    setTimeout(function () {
+      toast.classList.remove('translate-y-0', 'opacity-100');
+      toast.classList.add('translate-y-20', 'opacity-0');
+      toast.style.pointerEvents = 'none';
+    }, 4000);
   }
 </script>
