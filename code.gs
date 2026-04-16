@@ -1,5 +1,11 @@
-// code.gs
+﻿// code.gs
 // === CẤU HÌNH CHUNG ===
+const SPREADSHEET_ID = '11xvZ_QYO94o-LUY9aGPQ00Nu0y1ALjKfJr8VW8AIme8';
+
+function getSpreadsheet() {
+  return SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
 // Tên các sheet trong Google Spreadsheet
 const TASK_SHEET_NAME = 'Nhiệm vụ';
 const PROJECT_SHEET_NAME = 'Dự án/Nhiệm vụ';
@@ -98,7 +104,7 @@ function include(filename) {
  */
 function getInitialDataFast() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const spreadsheetId = ss.getId();
 
     // Batch get tất cả sheets cùng lúc
@@ -256,7 +262,7 @@ function authenticateUser(email, password) {
       return { success: false, error: 'Email và mật khẩu là bắt buộc' };
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
 
     if (!staffSheet) {
@@ -1005,7 +1011,7 @@ function addProject(projectData) {
       projectData.manager = currentUser.name;
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = getOrCreateSheet(ss, PROJECT_SHEET_NAME, [
       PROJECT_ID_COLUMN_NAME,
       PROJECT_NAME_COLUMN_NAME,
@@ -1066,7 +1072,7 @@ function updateProject(projectId, projectData) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1130,7 +1136,7 @@ function deleteProject(projectId) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1164,7 +1170,7 @@ function deleteProject(projectId) {
 
 function getProjects() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const sheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!sheet) {
       return [];
@@ -1185,7 +1191,7 @@ function addTask(taskData) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1286,7 +1292,7 @@ function updateTask(taskId, taskData) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1470,7 +1476,7 @@ function deleteTask(taskId) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -1532,7 +1538,7 @@ function formatJSONCompact(data) {
 
 function getTasks() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) {
       return [];
@@ -1588,7 +1594,7 @@ function addStaff(staffData) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = getOrCreateSheet(ss, STAFF_SHEET_NAME, [
       STAFF_ID_COLUMN_NAME,
       STAFF_NAME_COLUMN_NAME,
@@ -1640,7 +1646,7 @@ function updateStaff(staffId, staffData) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) throw new Error(`Không tìm thấy sheet "${STAFF_SHEET_NAME}".`);
 
@@ -1701,7 +1707,7 @@ function deleteStaff(staffId) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) throw new Error(`Không tìm thấy sheet "${STAFF_SHEET_NAME}".`);
 
@@ -1732,7 +1738,7 @@ function deleteStaff(staffId) {
 
 function getStaffList() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const sheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!sheet) {
       const newSheet = getOrCreateSheet(ss, STAFF_SHEET_NAME, [
@@ -1846,7 +1852,7 @@ function getSummaryStats(projects, tasks) {
 
 function getRecentActivities() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) {
       return [];
@@ -1981,7 +1987,7 @@ function logActivity(action, details, projectId = null) {
       }
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) return;
 
@@ -2116,7 +2122,7 @@ function generateNextId(lastId, prefix, minLength = 3) {
 function checkProjectExists(projectId) {
   if (!projectId) return false;
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) return false;
 
@@ -2171,7 +2177,7 @@ function formatSheetDate(dateValue) {
       return '';
     }
 
-    const timeZone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
+    const timeZone = getSpreadsheet().getSpreadsheetTimeZone();
     return Utilities.formatDate(date, timeZone, 'yyyy-MM-dd');
   } catch (e) {
     console.error('Error formatting date:', dateValue, '-', e);
@@ -2329,7 +2335,7 @@ function copyProject(projectId, newProjectName) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -2437,7 +2443,7 @@ function copyTask(taskId, newTaskName) {
   try {
     lock.waitLock(15000);
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) throw new Error(`Không tìm thấy sheet "${PROJECT_SHEET_NAME}".`);
 
@@ -2521,7 +2527,7 @@ function copyTask(taskId, newTaskName) {
 
 function getChatMessages() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const chatSheet = ss.getSheetByName(CHAT_SHEET_NAME);
 
     if (!chatSheet || chatSheet.getLastRow() < 2) {
@@ -2588,7 +2594,7 @@ function sendChatMessage(message) {
       return { success: false, error: 'Chưa đăng nhập' };
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const chatSheet = getOrCreateSheet(ss, CHAT_SHEET_NAME, [
       CHAT_ID_COLUMN_NAME,
       CHAT_DATE_COLUMN_NAME,
@@ -2693,7 +2699,7 @@ function changePassword(newPassword, confirmPassword) {
       return { success: false, error: 'Mật khẩu phải có ít nhất 3 ký tự' };
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) {
       return { success: false, error: 'Không tìm thấy dữ liệu nhân viên' };
@@ -2806,7 +2812,7 @@ function updateTaskStatus(taskId, newStatus) {
       return { success: false, error: 'Trạng thái không hợp lệ' };
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
     if (!projectSheet) return { success: false, error: 'Không tìm thấy dữ liệu' };
 
@@ -2935,7 +2941,7 @@ function getUserProfileData(callerEmail) {
       email = currentUser.email;
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
 
@@ -2993,7 +2999,7 @@ function updateUserProfile(profileData) {
       email = currentUser.email;
     }
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const staffSheet = ss.getSheetByName(STAFF_SHEET_NAME);
     if (!staffSheet) return { success: false, error: 'Không tìm thấy sheet nhân viên' };
 
@@ -3042,7 +3048,7 @@ function updateUserProfile(profileData) {
  */
 function getTotalPointsForStaff_(staffName) {
   try {
-    const achSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ACHIEVEMENT_SHEET_NAME);
+    const achSheet = getSpreadsheet().getSheetByName(ACHIEVEMENT_SHEET_NAME);
     if (!achSheet || achSheet.getLastRow() < 2) return 0;
     const staff = getStaffList();
     const member = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === staffName);
@@ -3060,7 +3066,7 @@ function getTotalPointsForStaff_(staffName) {
  */
 function writeLevelUpNotification_(staffName, levelInfo, totalPoints) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const sheet = getOrCreateSheet(ss, LEVEL_UP_NOTIF_SHEET_NAME, [
       LU_STAFF_COL, LU_NAME_COL, LU_TG_COL,
       LU_LEVEL_COL, LU_EMOJI_COL, LU_POINTS_COL, LU_TIME_COL, LU_SENT_COL,
@@ -3172,7 +3178,7 @@ function checkAndAwardAchievements(assigneeName, taskId, taskData, assignerName)
     if (!staffMember) return [];
     const staffId = staffMember[STAFF_ID_COLUMN_NAME];
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const achSheet = getOrCreateSheet(ss, ACHIEVEMENT_SHEET_NAME, [
       ACH_ID_COL, ACH_STAFF_COL, ACH_TYPE_COL, ACH_TITLE_COL,
       ACH_POINTS_COL, ACH_DATE_COL, ACH_DESC_COL
@@ -3321,7 +3327,7 @@ function calcStreak(sortedDateStrings) {
 function getLeaderboard(topN) {
   try {
     topN = topN || 5;
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
     if (!achSheet || achSheet.getLastRow() < 2) return { success: true, leaderboard: [] };
 
@@ -3369,7 +3375,7 @@ function getMyAchievements() {
     const staffMember = staff.find(s => s[STAFF_NAME_COLUMN_NAME] === currentUser.name);
     const staffId = staffMember ? staffMember[STAFF_ID_COLUMN_NAME] : null;
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const achSheet = ss.getSheetByName(ACHIEVEMENT_SHEET_NAME);
     if (!achSheet || achSheet.getLastRow() < 2) {
       return { success: true, achievements: [], totalPoints: 0, level: getLevelInfo(0) };
@@ -3423,7 +3429,7 @@ function getDailySummaryForBot() {
     const teamTotal = todayTasks.length;
 
     // Lấy danh sách Telegram users
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const tgSheet = ss.getSheetByName(TELEGRAM_USERS_SHEET_NAME);
     let telegramUsers = [];
     if (tgSheet && tgSheet.getLastRow() >= 2) {
@@ -3460,7 +3466,7 @@ function registerTelegramUser(telegramId, staffId, displayName) {
   try {
     if (!telegramId || !staffId) return { success: false, error: 'Thiếu thông tin' };
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const tgSheet = getOrCreateSheet(ss, TELEGRAM_USERS_SHEET_NAME, [
       TG_ID_COL, TG_STAFF_COL, TG_NAME_COL, TG_DATE_COL
     ]);
@@ -3496,7 +3502,7 @@ function registerTelegramUser(telegramId, staffId, displayName) {
  */
 function getTelegramUser(telegramId) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const tgSheet = ss.getSheetByName(TELEGRAM_USERS_SHEET_NAME);
     if (!tgSheet || tgSheet.getLastRow() < 2) return null;
 
@@ -3519,7 +3525,7 @@ function reorderTasks(projectId, orderedTaskIds) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSpreadsheet();
     const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
 
     const headers = getHeaders(projectSheet);
