@@ -5607,6 +5607,18 @@
       .updateTaskStatus(taskId, newStatus);
   }
 
+  // Mở modal thêm nhiệm vụ từ Kanban board, pre-chọn trạng thái cột
+  function openKanbanAddTask(status) {
+    if (!isAuthenticated) { showToast('Vui lòng đăng nhập', 'error'); return; }
+    if (!canUserCreateTask()) { showToast('Bạn không có quyền tạo nhiệm vụ', 'error'); return; }
+    openModal('task');
+    // Sau khi modal render xong, pre-chọn trạng thái
+    setTimeout(function () {
+      const statusSelect = document.querySelector('#task-modal select[name="status"]');
+      if (statusSelect) statusSelect.value = status;
+    }, 80);
+  }
+
   function refreshKanbanDataQuiet() {
     // Refresh allTasks in background without showing spinner
     google.script.run

@@ -1,4 +1,4 @@
-"""
+﻿"""
 handlers/projects.py — /projects, /project <id>
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ async def cmd_projects(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db = SheetsDB.get()
     projects = db.get_all_projects()
     if not projects:
-        await update.message.reply_text("📭 Không có dự án nào.")
+        await update.effective_message.reply_text("📭 Không có dự án nào.")
         return
 
     lines = ["📁 <b>Danh sách dự án</b>\n"]
@@ -40,12 +40,12 @@ async def cmd_projects(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
     lines.append("\nDùng /project &lt;ID&gt; để xem chi tiết.")
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 async def cmd_project(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "❌ Thiếu ID dự án.\nCú pháp: <code>/project DA001</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -57,7 +57,7 @@ async def cmd_project(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     project = next((p for p in projects if p["id"] == project_id), None)
 
     if not project:
-        await update.message.reply_text(f"❌ Không tìm thấy dự án <b>{project_id}</b>.",
+        await update.effective_message.reply_text(f"❌ Không tìm thấy dự án <b>{project_id}</b>.",
                                          parse_mode=ParseMode.HTML)
         return
 
@@ -83,9 +83,10 @@ async def cmd_project(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if len(status_tasks) > 5:
             lines.append(f"  ... và {len(status_tasks) - 5} nhiệm vụ khác")
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 def register(app) -> None:
     app.add_handler(CommandHandler("projects", cmd_projects))
     app.add_handler(CommandHandler("project", cmd_project))
+

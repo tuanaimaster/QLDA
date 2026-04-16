@@ -62,7 +62,7 @@ const CHAT_JSON_COLUMN_NAME = 'Chat JSON';
  * Phục vụ giao diện HTML khi truy cập URL ứng dụng web.
  */
 function doGet(e) {
-  return HtmlService.createTemplateFromFile('index')
+  return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('Quản Lý Dự Án')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')

@@ -221,8 +221,8 @@
           </div>
           <div class="text-xs text-gray-500 mt-2">
             © 2025
-            <a href="https://gsheets.vn" class="text-blue-500 hover:underline" target="_blank"
-              >gsheets.vn</a
+            <a href="https://mettatuan.com" class="text-blue-500 hover:underline" target="_blank"
+              >mettatuan.com</a
             >
           </div>
         </div>
@@ -580,7 +580,11 @@
               <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <i class="fas fa-trophy text-amber-500"></i> Bảng xếp hạng thành tích
               </h3>
-              <a href="#" data-section="kanban" class="nav-link text-xs px-3 py-1.5 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors">
+              <a
+                href="#"
+                data-section="kanban"
+                class="nav-link text-xs px-3 py-1.5 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors"
+              >
                 <i class="fas fa-columns mr-1"></i>Mở Kanban
               </a>
             </div>
@@ -1033,7 +1037,10 @@
                 <option value="">Tất cả người thực hiện</option>
               </select>
               <!-- Refresh indicator -->
-              <div id="kanban-refresh-indicator" class="flex items-center text-xs text-gray-400 hidden">
+              <div
+                id="kanban-refresh-indicator"
+                class="flex items-center text-xs text-gray-400 hidden"
+              >
                 <i class="fas fa-spinner fa-spin mr-1"></i> Đang tải...
               </div>
               <div id="kanban-last-updated" class="text-xs text-gray-400"></div>
@@ -1050,7 +1057,10 @@
                     <span class="kanban-dot bg-gray-400"></span>
                     <span class="font-semibold text-sm text-gray-700">Chưa bắt đầu</span>
                   </div>
-                  <span class="kanban-count-badge bg-gray-100 text-gray-600" id="kanban-count-0">0</span>
+                  <div class="flex items-center gap-2">
+                    <span class="kanban-count-badge bg-gray-100 text-gray-600" id="kanban-count-0">0</span>
+                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Chưa bắt đầu')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
+                  </div>
                 </div>
               </div>
               <div class="kanban-cards sortable-list" id="kanban-col-0" data-status="Chưa bắt đầu">
@@ -1066,10 +1076,17 @@
                     <span class="kanban-dot bg-blue-500"></span>
                     <span class="font-semibold text-sm text-blue-700">Đang thực hiện</span>
                   </div>
-                  <span class="kanban-count-badge bg-blue-100 text-blue-700" id="kanban-count-1">0</span>
+                  <div class="flex items-center gap-2">
+                    <span class="kanban-count-badge bg-blue-100 text-blue-700" id="kanban-count-1">0</span>
+                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Đang thực hiện')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
+                  </div>
                 </div>
               </div>
-              <div class="kanban-cards sortable-list" id="kanban-col-1" data-status="Đang thực hiện">
+              <div
+                class="kanban-cards sortable-list"
+                id="kanban-col-1"
+                data-status="Đang thực hiện"
+              >
                 <div class="kanban-empty-state">Không có nhiệm vụ</div>
               </div>
             </div>
@@ -1082,7 +1099,10 @@
                     <span class="kanban-dot bg-emerald-500"></span>
                     <span class="font-semibold text-sm text-emerald-700">Hoàn thành</span>
                   </div>
-                  <span class="kanban-count-badge bg-emerald-100 text-emerald-700" id="kanban-count-2">0</span>
+                  <div class="flex items-center gap-2">
+                    <span class="kanban-count-badge bg-emerald-100 text-emerald-700" id="kanban-count-2">0</span>
+                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Hoàn thành')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
+                  </div>
                 </div>
               </div>
               <div class="kanban-cards sortable-list" id="kanban-col-2" data-status="Hoàn thành">
@@ -1098,7 +1118,10 @@
                     <span class="kanban-dot bg-amber-400"></span>
                     <span class="font-semibold text-sm text-amber-700">Tạm dừng</span>
                   </div>
-                  <span class="kanban-count-badge bg-amber-100 text-amber-700" id="kanban-count-3">0</span>
+                  <div class="flex items-center gap-2">
+                    <span class="kanban-count-badge bg-amber-100 text-amber-700" id="kanban-count-3">0</span>
+                    <button class="kanban-add-btn" onclick="openKanbanAddTask('Tạm dừng')" title="Thêm nhiệm vụ"><i class="fas fa-plus"></i></button>
+                  </div>
                 </div>
               </div>
               <div class="kanban-cards sortable-list" id="kanban-col-3" data-status="Tạm dừng">
@@ -1113,7 +1136,10 @@
               <h4 class="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <i class="fas fa-trophy text-amber-500"></i> Bảng xếp hạng thành tích
               </h4>
-              <button id="view-my-achievements-btn" class="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
+              <button
+                id="view-my-achievements-btn"
+                class="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+              >
                 <i class="fas fa-medal mr-1"></i>Thành tích của tôi
               </button>
             </div>

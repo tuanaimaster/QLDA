@@ -1,4 +1,4 @@
-"""
+﻿"""
 handlers/daily.py — /daily (manual) + send_daily_summary (scheduled job)
 """
 from __future__ import annotations
@@ -37,7 +37,7 @@ async def cmd_daily(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
+        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
                                          parse_mode=ParseMode.HTML)
         return
 
@@ -48,7 +48,7 @@ async def cmd_daily(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not my_summary or my_summary["count"] == 0:
         today = date.today().strftime("%d/%m/%Y")
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"📊 <b>Tổng kết ngày {today}</b>\n\n"
             f"Bạn chưa hoàn thành nhiệm vụ nào hôm nay.\n"
             f"👥 Toàn đội hoàn thành: <b>{team_total}</b> nhiệm vụ",
@@ -57,7 +57,7 @@ async def cmd_daily(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     msg = _build_personal_summary(my_name, my_summary["tasks"], team_total)
-    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text(msg, parse_mode=ParseMode.HTML)
 
 
 async def send_daily_summary(bot: Bot) -> None:
@@ -89,3 +89,4 @@ async def send_daily_summary(bot: Bot) -> None:
 
 def register(app) -> None:
     app.add_handler(CommandHandler("daily", cmd_daily))
+

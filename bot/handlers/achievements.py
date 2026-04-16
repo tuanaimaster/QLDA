@@ -1,4 +1,4 @@
-"""
+﻿"""
 handlers/achievements.py — /achievements, /leaderboard
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ async def cmd_achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
+        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
                                          parse_mode=ParseMode.HTML)
         return
 
@@ -36,7 +36,7 @@ async def cmd_achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     total = db.get_total_points(staff_name)
 
     if not achievements:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"🏆 <b>Thành tích của {staff_name}</b>\n\n"
             "Bạn chưa có thành tích nào.\n"
             "Hoàn thành nhiệm vụ để nhận thành tích! 💪",
@@ -53,7 +53,7 @@ async def cmd_achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             f"   {ach.get('Mô tả', '')} — <i>{ach.get('Ngày đạt', '')}</i>"
         )
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -61,7 +61,7 @@ async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     board = db.get_leaderboard(top_n=10)
 
     if not board:
-        await update.message.reply_text("📊 Bảng xếp hạng chưa có dữ liệu.")
+        await update.effective_message.reply_text("📊 Bảng xếp hạng chưa có dữ liệu.")
         return
 
     medals = ["🥇", "🥈", "🥉"] + ["🏅"] * 7
@@ -70,9 +70,10 @@ async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         medal = medals[i] if i < len(medals) else "🏅"
         lines.append(f"{medal} {entry['name']} — <b>{entry['points']}</b> điểm")
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 def register(app) -> None:
     app.add_handler(CommandHandler("achievements", cmd_achievements))
     app.add_handler(CommandHandler("leaderboard", cmd_leaderboard))
+

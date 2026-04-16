@@ -1,4 +1,4 @@
-"""
+﻿"""
 handlers/tasks.py — /mytasks, /donetask, /assign, /addtask (ConversationHandler)
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _require_linked(func):
         db = SheetsDB.get()
         linked = db.get_telegram_user(str(update.effective_user.id))
         if not linked:
-            await update.message.reply_text(
+            await update.effective_message.reply_text(
                 "❌ Bạn chưa liên kết tài khoản.\nDùng /link &lt;Mã NV&gt;.",
                 parse_mode=ParseMode.HTML,
             )
@@ -62,7 +62,7 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
+        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
                                          parse_mode=ParseMode.HTML)
         return
 
@@ -70,7 +70,7 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     tasks = db.get_tasks_for_assignee(my_name)
 
     if not tasks:
-        await update.message.reply_text("📭 Bạn chưa có nhiệm vụ nào.")
+        await update.effective_message.reply_text("📭 Bạn chưa có nhiệm vụ nào.")
         return
 
     active = [t for t in tasks if t.get(T_STATUS) != "Hoàn thành"]
@@ -91,7 +91,7 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     lines.append(f"\n✅ Đã hoàn thành: {len(done)} nhiệm vụ")
     lines.append("\nDùng /donetask &lt;ID&gt; để đánh dấu hoàn thành.")
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 # ------------------------------------------------------------------
@@ -99,7 +99,7 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 # ------------------------------------------------------------------
 async def cmd_donetask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "❌ Thiếu ID nhiệm vụ.\nCú pháp: <code>/donetask DA001-01</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -109,19 +109,19 @@ async def cmd_donetask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
+        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
                                          parse_mode=ParseMode.HTML)
         return
 
     result = db.update_task_status(task_id, "Hoàn thành")
     if not result.get("success"):
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"❌ {result.get('error', 'Lỗi cập nhật')}", parse_mode=ParseMode.HTML
         )
         return
 
     task = result.get("task", {})
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"✅ Đã hoàn thành: <b>{task.get(T_NAME, task_id)}</b>\n"
         "🎉 Bạn có thể dùng /achievements để xem thành tích!",
         parse_mode=ParseMode.HTML,
@@ -133,7 +133,7 @@ async def cmd_donetask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # ------------------------------------------------------------------
 async def cmd_assign(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if len(context.args) < 2:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             "❌ Cú pháp: <code>/assign DA001-01 Nguyễn Văn A</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -147,7 +147,7 @@ async def cmd_assign(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     staff_all = db.get_all_staff()
     names = [str(s.get("Họ tên", "")).strip() for s in staff_all]
     if assignee not in names:
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"❌ Không tìm thấy nhân viên <b>{assignee}</b>.\n"
             "Kiểm tra lại tên (phân biệt hoa/thường).",
             parse_mode=ParseMode.HTML,
@@ -156,12 +156,12 @@ async def cmd_assign(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     result = db.update_task_field(task_id, T_ASSIGNEE, assignee)
     if not result.get("success"):
-        await update.message.reply_text(
+        await update.effective_message.reply_text(
             f"❌ {result.get('error', 'Lỗi cập nhật')}", parse_mode=ParseMode.HTML
         )
         return
 
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         f"✅ Đã phân công <code>{task_id}</code> cho <b>{assignee}</b>.",
         parse_mode=ParseMode.HTML,
     )
@@ -174,20 +174,20 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
+        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
                                          parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
     projects = db.get_all_projects()
     if not projects:
-        await update.message.reply_text("❌ Chưa có dự án nào.")
+        await update.effective_message.reply_text("❌ Chưa có dự án nào.")
         return ConversationHandler.END
 
     context.user_data["add_task"] = {}
     buttons = [[InlineKeyboardButton(f"{p['id']} — {p['name']}", callback_data=f"ap:{p['id']}")]
                for p in projects]
     buttons.append([InlineKeyboardButton("❌ Hủy", callback_data="ap:cancel")])
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "📁 Chọn dự án cho nhiệm vụ:",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -214,7 +214,7 @@ async def add_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     names = [str(s.get("Họ tên", "")).strip() for s in staff_all if s.get("Họ tên")]
     buttons = [[InlineKeyboardButton(n, callback_data=f"aa:{n}")] for n in names[:10]]
     buttons.append([InlineKeyboardButton("⏭️ Bỏ qua", callback_data="aa:skip")])
-    await update.message.reply_text(
+    await update.effective_message.reply_text(
         "👤 Phân công cho ai?",
         reply_markup=InlineKeyboardMarkup(buttons),
     )
@@ -259,7 +259,7 @@ async def add_got_due(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         [InlineKeyboardButton("✅ Xác nhận", callback_data="ac:confirm"),
          InlineKeyboardButton("❌ Hủy", callback_data="ac:cancel")],
     ]
-    await update.message.reply_text(summary, parse_mode=ParseMode.HTML,
+    await update.effective_message.reply_text(summary, parse_mode=ParseMode.HTML,
                                      reply_markup=InlineKeyboardMarkup(buttons))
     return ADD_CONFIRM
 
@@ -294,7 +294,7 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 
 async def add_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text("❌ Đã hủy thêm nhiệm vụ.")
+    await update.effective_message.reply_text("❌ Đã hủy thêm nhiệm vụ.")
     return ConversationHandler.END
 
 
@@ -317,3 +317,4 @@ def register(app) -> None:
         allow_reentry=True,
     )
     app.add_handler(add_conv)
+
