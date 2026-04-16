@@ -306,17 +306,18 @@ function authenticateUser(email, password) {
           position: row[headers.indexOf(STAFF_POSITION_COLUMN_NAME)] || '',
         };
 
-        // Store session
-        storeUserSession(userData);
+        // Store session — returns UUID token
+        const sessionToken = storeUserSession(userData);
 
-        // Trả về toàn bộ data trong 1 lần gọi (không cần call thứ 2)
+        // Trả về toàn bộ data + token trong 1 lần gọi
         try {
           const fullData = buildDataResponseForUser(userData);
           fullData.message = 'Đăng nhập thành công';
+          fullData.token = sessionToken;
           return fullData;
         } catch (dataErr) {
           console.error('Error loading data after auth:', dataErr);
-          return { success: true, user: userData, message: 'Đăng nhập thành công' };
+          return { success: true, user: userData, token: sessionToken, message: 'Đăng nhập thành công' };
         }
       }
     }
@@ -329,59 +330,39 @@ function authenticateUser(email, password) {
 }
 
 /**
- * Store user session in PropertiesService
+ * Store user session — returns a UUID token for client to store
  */
-
 function storeUserSession(userData) {
   try {
+    const token = Utilities.getUuid();
     const sessionData = {
       ...userData,
       loginTime: new Date().toISOString(),
-      sessionId: Utilities.getUuid(),
+      sessionId: token,
     };
-
-    // THAY ĐỔI: Sử dụng email làm key để phân biệt session từng user
-    const sessionKey = `user_session_${userData.email}`;
-    PropertiesService.getScriptProperties().setProperty(sessionKey, JSON.stringify(sessionData));
-
-    // Lưu thêm current session key để logout
-    const currentUserKey = `current_user_${Session.getTemporaryActiveUserKey()}`;
-    PropertiesService.getScriptProperties().setProperty(currentUserKey, userData.email);
+    // Key = token UUID — no dependency on getTemporaryActiveUserKey()
+    PropertiesService.getScriptProperties().setProperty('tok_' + token, JSON.stringify(sessionData));
+    return token;
   } catch (e) {
     console.error('Error storing session:', e);
+    return null;
   }
 }
 
 /**
- * Get current user session
+ * Get current user by token (client sends token with every call)
  */
-function getCurrentUser() {
+function getCurrentUser(token) {
+  if (!token) return null;
   try {
-    // Lấy email của user hiện tại từ session key
-    const currentUserKey = `current_user_${Session.getTemporaryActiveUserKey()}`;
-    const userEmail = PropertiesService.getScriptProperties().getProperty(currentUserKey);
-
-    if (!userEmail) {
-      return null;
-    }
-
-    const sessionKey = `user_session_${userEmail}`;
-    const sessionString = PropertiesService.getScriptProperties().getProperty(sessionKey);
-
-    if (!sessionString) {
-      return null;
-    }
+    const sessionString = PropertiesService.getScriptProperties().getProperty('tok_' + token);
+    if (!sessionString) return null;
 
     const sessionData = JSON.parse(sessionString);
 
-    // Check if session is still valid (24 hours)
-    const loginTime = new Date(sessionData.loginTime);
-    const now = new Date();
-    const sessionDuration = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-
-    if (now - loginTime > sessionDuration) {
-      // Session expired
-      logout();
+    // Check 24-hour expiry
+    if (new Date() - new Date(sessionData.loginTime) > 24 * 60 * 60 * 1000) {
+      PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
       return null;
     }
 
@@ -393,23 +374,13 @@ function getCurrentUser() {
 }
 
 /**
- * Logout user
+ * Logout user — deletes session by token
  */
-function logout() {
+function logout(token) {
   try {
-    // Lấy email của user hiện tại
-    const currentUserKey = `current_user_${Session.getTemporaryActiveUserKey()}`;
-    const userEmail = PropertiesService.getScriptProperties().getProperty(currentUserKey);
-
-    if (userEmail) {
-      // Xóa session của user này
-      const sessionKey = `user_session_${userEmail}`;
-      PropertiesService.getScriptProperties().deleteProperty(sessionKey);
+    if (token) {
+      PropertiesService.getScriptProperties().deleteProperty('tok_' + token);
     }
-
-    // Xóa current user key
-    PropertiesService.getScriptProperties().deleteProperty(currentUserKey);
-
     return { success: true, message: 'Đăng xuất thành công' };
   } catch (e) {
     console.error('Error during logout:', e);
@@ -440,9 +411,9 @@ function isManager(user) {
 /**
  * Get filtered data based on user role
  */
-function getDataForUser() {
+function getDataForUser(token) {
   try {
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
 
     if (!currentUser) {
       return {
@@ -597,8 +568,8 @@ function getDataForUser() {
 /**
  * Updated addProject with permission check
  */
-function addProjectWithAuth(projectData) {
-  const permissionCheck = checkUserPermission('create', 'project');
+function addProjectWithAuth(projectData, token) {
+  const permissionCheck = checkUserPermission('create', 'project', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -609,7 +580,7 @@ function addProjectWithAuth(projectData) {
 /**
  * Updated updateProject with permission check
  */
-function updateProjectWithAuth(projectId, projectData) {
+function updateProjectWithAuth(projectId, projectData, token) {
   // LẤY DỮ LIỆU DỰ ÁN GỐC TRƯỚC KHI KIỂM TRA QUYỀN
   const projects = getProjects();
   const originalProject = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === projectId);
@@ -619,7 +590,7 @@ function updateProjectWithAuth(projectId, projectData) {
   }
 
   // Kiểm tra quyền dựa trên dự án gốc
-  const permissionCheck = checkUserPermission('update', 'project', originalProject);
+  const permissionCheck = checkUserPermission('update', 'project', originalProject, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -630,7 +601,7 @@ function updateProjectWithAuth(projectId, projectData) {
 /**
  * Updated deleteProject with permission check
  */
-function deleteProjectWithAuth(projectId) {
+function deleteProjectWithAuth(projectId, token) {
   // LẤY DỮ LIỆU DỰ ÁN GỐC TRƯỚC KHI KIỂM TRA QUYỀN
   const projects = getProjects();
   const originalProject = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === projectId);
@@ -639,7 +610,7 @@ function deleteProjectWithAuth(projectId) {
     return { success: false, error: `Không tìm thấy dự án ID: ${projectId}` };
   }
 
-  const permissionCheck = checkUserPermission('delete', 'project', originalProject);
+  const permissionCheck = checkUserPermission('delete', 'project', originalProject, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -650,8 +621,8 @@ function deleteProjectWithAuth(projectId) {
 /**
  * Updated addTask with permission check
  */
-function addTaskWithAuth(taskData) {
-  const permissionCheck = checkUserPermission('create', 'task');
+function addTaskWithAuth(taskData, token) {
+  const permissionCheck = checkUserPermission('create', 'task', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -662,12 +633,12 @@ function addTaskWithAuth(taskData) {
 /**
  * Updated updateTask with permission check
  */
-function updateTaskWithAuth(taskId, taskData) {
+function updateTaskWithAuth(taskId, taskData, token) {
   // Get original task data for permission check
   const tasks = getTasks();
   const originalTask = tasks.find((task) => task[TASK_ID_COLUMN_NAME] === taskId);
 
-  const permissionCheck = checkUserPermission('update', 'task', originalTask);
+  const permissionCheck = checkUserPermission('update', 'task', originalTask, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -678,12 +649,12 @@ function updateTaskWithAuth(taskId, taskData) {
 /**
  * Updated deleteTask with permission check
  */
-function deleteTaskWithAuth(taskId) {
+function deleteTaskWithAuth(taskId, token) {
   // Get original task data for permission check
   const tasks = getTasks();
   const originalTask = tasks.find((task) => task[TASK_ID_COLUMN_NAME] === taskId);
 
-  const permissionCheck = checkUserPermission('delete', 'task', originalTask);
+  const permissionCheck = checkUserPermission('delete', 'task', originalTask, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -694,8 +665,8 @@ function deleteTaskWithAuth(taskId) {
 /**
  * Updated staff functions with permission checks
  */
-function addStaffWithAuth(staffData) {
-  const permissionCheck = checkUserPermission('create', 'staff');
+function addStaffWithAuth(staffData, token) {
+  const permissionCheck = checkUserPermission('create', 'staff', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -703,8 +674,8 @@ function addStaffWithAuth(staffData) {
   return addStaff(staffData);
 }
 
-function updateStaffWithAuth(staffId, staffData) {
-  const permissionCheck = checkUserPermission('update', 'staff');
+function updateStaffWithAuth(staffId, staffData, token) {
+  const permissionCheck = checkUserPermission('update', 'staff', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -712,8 +683,8 @@ function updateStaffWithAuth(staffId, staffData) {
   return updateStaff(staffId, staffData);
 }
 
-function deleteStaffWithAuth(staffId) {
-  const permissionCheck = checkUserPermission('delete', 'staff');
+function deleteStaffWithAuth(staffId, token) {
+  const permissionCheck = checkUserPermission('delete', 'staff', null, token);
   if (!permissionCheck.success) {
     return permissionCheck;
   }
@@ -724,8 +695,8 @@ function deleteStaffWithAuth(staffId) {
 /**
  * Updated getInitialData to check authentication
  */
-function getInitialDataWithAuth() {
-  const currentUser = getCurrentUser();
+function getInitialDataWithAuth(token) {
+  const currentUser = getCurrentUser(token);
 
   if (!currentUser) {
     return {
@@ -855,8 +826,8 @@ function getInitialDataWithAuth() {
 /**
  * Check user permissions for operations
  */
-function checkUserPermission(action, resourceType, resourceData = null) {
-  const currentUser = getCurrentUser();
+function checkUserPermission(action, resourceType, resourceData, token) {
+  const currentUser = getCurrentUser(token);
 
   if (!currentUser) {
     return { success: false, error: 'Chưa đăng nhập' };
@@ -2584,12 +2555,12 @@ function getChatMessages() {
   }
 }
 
-function sendChatMessage(message) {
+function sendChatMessage(message, token) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(5000); // ← Giảm timeout từ 10000 xuống 5000
 
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
     if (!currentUser) {
       return { success: false, error: 'Chưa đăng nhập' };
     }
@@ -2680,9 +2651,9 @@ function formatChatJSON(messages) {
 }
 
 // Thêm hàm này vào cuối file code.gs:
-function changePassword(newPassword, confirmPassword) {
+function changePassword(newPassword, confirmPassword, token) {
   try {
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
     if (!currentUser) {
       return { success: false, error: 'Chưa đăng nhập' };
     }
@@ -2733,16 +2704,16 @@ function changePassword(newPassword, confirmPassword) {
 /**
  * Lấy dữ liệu Kanban (tasks grouped by status, kèm tên dự án + assignee)
  */
-function getKanbanData(projectFilter, assigneeFilter) {
+function getKanbanData(projectFilter, assigneeFilter, token) {
   try {
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
     if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
 
     let tasks = [];
     let projects = [];
 
     // Dùng getDataForUser để áp dụng phân quyền
-    const data = getDataForUser();
+    const data = getDataForUser(token);
     if (data.success) {
       tasks = data.tasks || [];
       projects = data.projects || [];
@@ -2799,12 +2770,12 @@ function getKanbanData(projectFilter, assigneeFilter) {
 /**
  * Cập nhật nhanh trạng thái task (dùng cho kéo thả Kanban)
  */
-function updateTaskStatus(taskId, newStatus) {
+function updateTaskStatus(taskId, newStatus, token) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
 
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
     if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
 
     const allowedStatuses = ['Chưa bắt đầu', 'Đang thực hiện', 'Hoàn thành', 'Tạm dừng'];
@@ -3366,9 +3337,9 @@ function getLeaderboard(topN) {
 /**
  * Lấy thành tích của nhân viên hiện tại
  */
-function getMyAchievements() {
+function getMyAchievements(token) {
   try {
-    const currentUser = getCurrentUser();
+    const currentUser = getCurrentUser(token);
     if (!currentUser) return { success: false, error: 'Chưa đăng nhập' };
 
     const staff = getStaffList();

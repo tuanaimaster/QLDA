@@ -11,6 +11,7 @@
   let currentUser = null; // Store current logged in user
   let isAuthenticated = false;
   let draggedItem = null;
+  let currentToken = localStorage.getItem('qlda_tok') || null;
   let draggedProjectId = null;
   let currentStatListData = [];
 
@@ -90,7 +91,7 @@
         showToast('Lỗi kết nối: ' + error.message, 'error');
         showLoginModal();
       })
-      .getInitialDataWithAuth();
+        .getInitialDataWithAuth(currentToken);
   }
 
   function showLoginModal() {
@@ -157,6 +158,12 @@
   function handleSuccessfulLogin(dataResponse) {
     currentUser = dataResponse.user;
     isAuthenticated = true;
+
+    // Lưu token để dùng cho mọi server call sau này
+    if (dataResponse.token) {
+      currentToken = dataResponse.token;
+      localStorage.setItem('qlda_tok', currentToken);
+    }
 
     allProjects = dataResponse.projects || [];
     allTasks = dataResponse.tasks || [];
@@ -437,12 +444,16 @@
           showLoginModal();
 
           showToast('Đăng xuất thành công', 'success');
+
+          // Xóa token
+          currentToken = null;
+          localStorage.removeItem('qlda_tok');
         })
         .withFailureHandler(function (error) {
           // hideLoading();
           showToast('Lỗi khi đăng xuất: ' + error.message, 'error');
         })
-        .logout();
+        .logout(currentToken);
     }
   }
 
@@ -517,7 +528,7 @@
           setButtonLoading(submitBtn, false);
           showToast('Lỗi: ' + error.message, 'error');
         })
-        .changePassword(newPassword, confirmPassword);
+          .changePassword(newPassword, confirmPassword, currentToken);
     });
 
     // Setup close handlers
@@ -2885,7 +2896,7 @@
         setButtonLoading(submitBtn, false);
         showToast('Lỗi: ' + error.message, 'error');
       })
-      [apiMethod](data);
+          [apiMethod](data, currentToken);
   }
 
   function handleEdit(type, originalData) {
@@ -2981,7 +2992,7 @@
         updateOptimisticUpdate(type, id, originalData);
         showToast('Lỗi: ' + error.message, 'error');
       })
-      [apiMethod](id, data);
+          [apiMethod](id, data, currentToken);
   }
 
   function confirmDelete(type, id, name) {
@@ -3020,7 +3031,7 @@
           if (deleteBtn) setButtonLoading(deleteBtn, false);
           showToast('Lỗi: ' + error.message, 'error');
         })
-        [apiMethod](id);
+          [apiMethod](id, currentToken);
     }
   }
 
@@ -3042,7 +3053,7 @@
         // hideLoading();
         showToast('Lỗi khi tải dữ liệu: ' + error.message, 'error');
       })
-      .getDataForUser();
+        .getDataForUser(currentToken);
   }
 
   // === Button Loading State Management ===
@@ -4823,7 +4834,7 @@
         sendBtn.disabled = false;
         input.disabled = false;
       })
-      .sendChatMessage(message);
+        .sendChatMessage(message, currentToken);
   }
 
   function handleQuickCompleteTask(e) {
@@ -4901,7 +4912,7 @@
                 checkbox.disabled = false;
                 showToast('Lỗi kết nối: ' + error.message, 'error');
               })
-              .updateTaskWithAuth(taskId, updateData);
+                .updateTaskWithAuth(taskId, updateData, currentToken);
           }
         },
         function () {
@@ -5633,7 +5644,7 @@
         showToast('Lỗi kết nối: ' + err.message, 'error');
         loadKanbanData();
       })
-      .updateTaskStatus(taskId, newStatus);
+        .updateTaskStatus(taskId, newStatus, currentToken);
   }
 
   // Mở modal thêm nhiệm vụ từ Kanban board, pre-chọn trạng thái cột
@@ -5665,7 +5676,7 @@
         }
       })
       .withFailureHandler(function() {})
-      .getDataForUser();
+      .getDataForUser(currentToken);
   }
 
   // Smart refresh: on click + 15-min idle
@@ -6061,7 +6072,7 @@
       .withFailureHandler(function(err) {
         showToast('Lỗi: ' + err.message, 'error');
       })
-      .getMyAchievements();
+        .getMyAchievements(currentToken);
   }
 
   // ============================================================
