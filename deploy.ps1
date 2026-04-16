@@ -40,13 +40,23 @@ if ($dirty) {
 git -C $PSScriptRoot push origin master 2>$null
 Write-OK "GitHub OK"
 
-# Step 2: clasp push
+# Step 2: clasp push + deploy
 Write-Step 2 "clasp push to Google Apps Script"
 
 Push-Location $PSScriptRoot
 $claspOut = npx clasp push --force 2>&1
-Pop-Location
 $claspOut | ForEach-Object { Write-Host "  $_" }
+
+# Update all production deployments to latest code
+$deployIds = @(
+    "AKfycbyfamsRjniCrpY_VvB7R1vosGVAbWGYwsOtR8IuZnwfv9xT3P3cNdw9gIXSX3nHhsgW",
+    "AKfycbyRwtKYXdSBt81n19PpyGNpPoYQQP3AEA9wLxqtBVUKAjD6G4dIbiccFB8vpApYL5Q"
+)
+foreach ($id in $deployIds) {
+    $out = npx clasp deploy --deploymentId $id --description "auto-deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
+    Write-Host "  $out"
+}
+Pop-Location
 Write-OK "Google Apps Script OK"
 
 # Step 3: VPS
