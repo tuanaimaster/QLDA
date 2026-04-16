@@ -171,6 +171,83 @@ function parseSheetData(values) {
 }
 
 /**
+ * Build full data response for a given user object (no session lookup needed)
+ */
+function buildDataResponseForUser(userData) {
+  const data = getInitialDataFast();
+
+  let projects = data.projects || [];
+  let tasks = data.tasks || [];
+  const staff = data.staff || [];
+  let recentActivities = data.recentActivities || [];
+
+  if (!isAdmin(userData)) {
+    if (isManager(userData)) {
+      const managerProjectIds = projects
+        .filter((p) => p[PROJECT_MANAGER_COLUMN_NAME] === userData.name)
+        .map((p) => p[PROJECT_ID_COLUMN_NAME]);
+
+      tasks = tasks.filter((t) => {
+        if (t[TASK_ASSIGNEE_COLUMN_NAME] === userData.name) return true;
+        if (managerProjectIds.includes(t[TASK_PROJECT_ID_COLUMN_NAME])) return true;
+        return false;
+      });
+
+      const taskProjectIds = tasks.map((t) => t[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id);
+      projects = projects.filter(
+        (p) =>
+          p[PROJECT_MANAGER_COLUMN_NAME] === userData.name ||
+          taskProjectIds.includes(p[PROJECT_ID_COLUMN_NAME])
+      );
+    } else {
+      tasks = tasks.filter((t) => {
+        const assignee = String(t[TASK_ASSIGNEE_COLUMN_NAME] || '').trim();
+        if (assignee === userData.name) return true;
+        const project = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === t[TASK_PROJECT_ID_COLUMN_NAME]);
+        return project && project[PROJECT_MANAGER_COLUMN_NAME] === userData.name;
+      });
+
+      const userProjectIds = new Set(tasks.map((t) => t[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id));
+      projects
+        .filter((p) => p[PROJECT_MANAGER_COLUMN_NAME] === userData.name)
+        .forEach((p) => userProjectIds.add(p[PROJECT_ID_COLUMN_NAME]));
+      projects = projects.filter((p) => userProjectIds.has(p[PROJECT_ID_COLUMN_NAME]));
+    }
+
+    recentActivities = recentActivities.filter((a) => {
+      const u = String(a[LOG_USER_COLUMN_NAME] || '').trim();
+      return u === userData.email || u === userData.name;
+    });
+  }
+
+  let filteredStaff = staff;
+  if (!isAdmin(userData)) {
+    if (isManager(userData)) {
+      filteredStaff = staff.filter((s) => !String(s[STAFF_ROLE_COLUMN_NAME] || '').toLowerCase().includes('admin'));
+    } else {
+      const managedProjects = projects.filter((p) => p[PROJECT_MANAGER_COLUMN_NAME] === userData.name);
+      if (managedProjects.length > 0) {
+        filteredStaff = staff.filter((s) => !String(s[STAFF_ROLE_COLUMN_NAME] || '').toLowerCase().includes('admin'));
+      } else {
+        const me = staff.find((s) => s[STAFF_NAME_COLUMN_NAME] === userData.name);
+        filteredStaff = me ? [me] : [];
+      }
+    }
+  }
+
+  return {
+    success: true,
+    user: userData,
+    projects: projects,
+    tasks: tasks,
+    staff: isAdmin(userData) ? staff : filteredStaff,
+    chartData: data.chartData,
+    recentActivities: recentActivities,
+    summaryStats: data.summaryStats,
+  };
+}
+
+/**
  * Authenticate user with email and password
  */
 function authenticateUser(email, password) {
@@ -226,11 +303,15 @@ function authenticateUser(email, password) {
         // Store session
         storeUserSession(userData);
 
-        return {
-          success: true,
-          user: userData,
-          message: 'Đăng nhập thành công',
-        };
+        // Trả về toàn bộ data trong 1 lần gọi (không cần call thứ 2)
+        try {
+          const fullData = buildDataResponseForUser(userData);
+          fullData.message = 'Đăng nhập thành công';
+          return fullData;
+        } catch (dataErr) {
+          console.error('Error loading data after auth:', dataErr);
+          return { success: true, user: userData, message: 'Đăng nhập thành công' };
+        }
       }
     }
 

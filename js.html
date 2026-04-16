@@ -139,20 +139,9 @@
           hideLoginModal();
           hideLoginError();
 
-          // Get user data and initialize
-          google.script.run
-            .withSuccessHandler(function (dataResponse) {
-              if (dataResponse.success) {
-                handleSuccessfulLogin(dataResponse);
-                showToast('Đăng nhập thành công!', 'success');
-              } else {
-                showToast(dataResponse.error || 'Lỗi khi tải dữ liệu', 'error');
-              }
-            })
-            .withFailureHandler(function (error) {
-              showToast('Lỗi khi tải dữ liệu: ' + error.message, 'error');
-            })
-            .getDataForUser();
+          // authenticateUser đã trả về toàn bộ data trong 1 lần gọi
+          handleSuccessfulLogin(response);
+          showToast('Đăng nhập thành công!', 'success');
         } else {
           showLoginError(response.error || 'Đăng nhập thất bại');
         }
