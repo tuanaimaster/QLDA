@@ -32,7 +32,7 @@ echo -e "${GREEN}  ✅ OK${NC}"
 echo -e "${YELLOW}[2/7] Lấy source code...${NC}"
 if [ -d "$BOT_DIR/.git" ]; then
   cd "$BOT_DIR"
-  git pull origin main
+  git pull origin master
   echo -e "${GREEN}  ✅ Pulled latest code${NC}"
 else
   git clone https://github.com/tuanaimaster/QLDA.git "$BOT_DIR" 2>/dev/null || {
