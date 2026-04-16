@@ -49,7 +49,7 @@ $claspOut | ForEach-Object { Write-Host "  $_" }
 
 # Update all production deployments to latest code
 $deployIds = @(
-    "AKfycbyowvuVCFA4BJs72r1ttz2DP1qcxWgoTax1RsdOMh4vBgeuWP2ZUTX6nOGlySJU4ub-"
+    "AKfycbxJog68wCM7olCApEBLzEZVKEu09ItzHhr4_BVaXZaxQMXBzSx4cppBpZeYGb22EW69"
 )
 foreach ($id in $deployIds) {
     $out = npx clasp deploy --deploymentId $id --description "auto-deploy $(Get-Date -Format 'yyyy-MM-dd HH:mm')" 2>&1
