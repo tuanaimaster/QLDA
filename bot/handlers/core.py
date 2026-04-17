@@ -5,14 +5,45 @@ from __future__ import annotations
 
 import logging
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    InlineKeyboardButton, InlineKeyboardMarkup,
+    KeyboardButton, ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.constants import ParseMode
-from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import (
+    CallbackQueryHandler, CommandHandler, ContextTypes,
+    MessageHandler, filters,
+)
 
 from config import COL_STAFF_ID, COL_STAFF_NAME
 from sheets import SheetsDB
 
 logger = logging.getLogger(__name__)
+
+# ── Persistent bottom keyboard (always visible, no typing needed) ──────────────
+PERSISTENT_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton("📋 Nhiệm vụ"),   KeyboardButton("📁 Dự án")],
+        [KeyboardButton("➕ Thêm NV"),    KeyboardButton("📊 Báo cáo")],
+        [KeyboardButton("🏆 Thành tích"), KeyboardButton("🥇 Xếp hạng")],
+        [KeyboardButton("👤 Tài khoản"),  KeyboardButton("❓ Trợ giúp")],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
+)
+
+# Map button text → handler action (must match keyboard labels exactly)
+_BUTTON_ROUTES: dict[str, str] = {
+    "📋 Nhiệm vụ":   "mytasks",
+    "📁 Dự án":      "projects",
+    "➕ Thêm NV":    "addtask",
+    "📊 Báo cáo":    "daily",
+    "🏆 Thành tích": "achievements",
+    "🥇 Xếp hạng":  "leaderboard",
+    "👤 Tài khoản":  "me",
+    "❓ Trợ giúp":   "help",
+}
 
 # ── Inline-keyboard menu definition ────────────────────────────────────────────
 MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
@@ -36,7 +67,7 @@ MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
 
 
 async def send_main_menu(update: Update, text: str) -> None:
-    """Helper: gửi tin nhắn kèm inline menu."""
+    """Helper: gửi tin nhắn kèm inline menu + giữ persistent keyboard."""
     if update.callback_query:
         await update.callback_query.edit_message_text(text, parse_mode=ParseMode.HTML, reply_markup=MAIN_MENU_KEYBOARD)
     else:
@@ -50,10 +81,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if existing:
         staff_name = existing.get("Tên hiển thị", "")
-        await send_main_menu(
-            update,
+        await update.message.reply_text(
             f"👋 Chào mừng trở lại, <b>{staff_name}</b>!\n\n"
-            "Chọn chức năng bên dưới hoặc gõ lệnh trực tiếp:",
+            "Các nút bên dưới luôn sẵn sàng — chỉ cần bấm 👇",
+            parse_mode=ParseMode.HTML,
+            reply_markup=PERSISTENT_KEYBOARD,
         )
     else:
         await update.message.reply_text(
@@ -67,19 +99,28 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Hiển thị menu chính bất kỳ lúc nào."""
+    """Hiển thị menu chính + kích hoạt lại persistent keyboard nếu cần."""
     db = SheetsDB.get()
     tg_user = update.effective_user
     existing = db.get_telegram_user(str(tg_user.id))
     if existing:
         name = existing.get("Tên hiển thị", "bạn")
-        await send_main_menu(update, f"🏠 <b>Menu chính</b> — Xin chào <b>{name}</b>!\nChọn chức năng:")
+        if update.message:
+            # Called as /menu command — resend persistent keyboard + inline menu
+            await update.message.reply_text(
+                f"🏠 <b>Menu chính</b> — Xin chào <b>{name}</b>!\nCác nút bên dưới luôn sẵn sàng 👇",
+                parse_mode=ParseMode.HTML,
+                reply_markup=PERSISTENT_KEYBOARD,
+            )
+        else:
+            await send_main_menu(update, f"🏠 <b>Menu chính</b> — Xin chào <b>{name}</b>!\nChọn chức năng:")
     else:
-        msg = update.message or update.callback_query.message
-        await msg.reply_text(
-            "❌ Bạn chưa liên kết tài khoản.\nDùng <code>/link &lt;Mã NV&gt;</code> trước.",
-            parse_mode=ParseMode.HTML,
-        )
+        msg = update.message or (update.callback_query.message if update.callback_query else None)
+        if msg:
+            await msg.reply_text(
+                "❌ Bạn chưa liên kết tài khoản.\nDùng <code>/link &lt;Mã NV&gt;</code> trước.",
+                parse_mode=ParseMode.HTML,
+            )
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -154,10 +195,11 @@ async def cmd_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             parse_mode=ParseMode.HTML,
         )
     else:
-        await send_main_menu(
-            update,
+        await update.message.reply_text(
             f"✅ Liên kết thành công!\n👤 <b>{display_name}</b> ({staff_id})\n\n"
-            "Chọn chức năng bên dưới để bắt đầu:",
+            "Keyboard bên dưới luôn sẵn sàng — chỉ cần bấm 👇",
+            parse_mode=ParseMode.HTML,
+            reply_markup=PERSISTENT_KEYBOARD,
         )
 
 
@@ -177,9 +219,13 @@ async def _do_link_by_id(update: Update, staff_id: str) -> None:
     verb = "cập nhật" if result.get("updated") else "liên kết"
     await update.callback_query.edit_message_text(
         f"✅ Đã {verb}: <b>{display_name}</b> ({staff_id})\n\n"
-        "Bấm /menu để bắt đầu.",
+        "Keyboard bên dưới luôn sẵn sàng — chỉ cần bấm 👇",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu chính", callback_data="menu:home")]]),
+    )
+    # Send a new message to activate the persistent keyboard
+    await update.callback_query.message.reply_text(
+        "🏠 Sẵn sàng!",
+        reply_markup=PERSISTENT_KEYBOARD,
     )
 
 
@@ -293,6 +339,38 @@ async def handle_link_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await _do_link_by_id(update, action.upper())
 
 
+# ── Persistent keyboard text button handler ────────────────────────────────────
+async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Route persistent-keyboard button presses to the correct handler."""
+    text = update.message.text.strip()
+    action = _BUTTON_ROUTES.get(text)
+    if not action:
+        return
+
+    if action == "mytasks":
+        from handlers import tasks as _tasks
+        await _tasks.cmd_mytasks(update, context)
+    elif action == "projects":
+        from handlers import projects as _projects
+        await _projects.cmd_projects(update, context)
+    elif action == "addtask":
+        from handlers import tasks as _tasks
+        await _tasks.add_start(update, context)
+    elif action == "daily":
+        from handlers import daily as _daily
+        await _daily.cmd_daily(update, context)
+    elif action == "achievements":
+        from handlers import achievements as _ach
+        await _ach.cmd_achievements(update, context)
+    elif action == "leaderboard":
+        from handlers import achievements as _ach
+        await _ach.cmd_leaderboard(update, context)
+    elif action == "me":
+        await cmd_me(update, context)
+    elif action == "help":
+        await cmd_help(update, context)
+
+
 def register(app) -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu",  cmd_menu))
@@ -301,3 +379,8 @@ def register(app) -> None:
     app.add_handler(CommandHandler("me",    cmd_me))
     app.add_handler(CallbackQueryHandler(handle_menu_callback, pattern=r"^menu:"))
     app.add_handler(CallbackQueryHandler(handle_link_callback, pattern=r"^lnk:"))
+    # Persistent keyboard button presses — group=1 so ConversationHandlers (group=0) take priority
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND,
+        handle_text_buttons,
+    ), group=1)
