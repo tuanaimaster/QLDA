@@ -22,6 +22,7 @@ const TASK_TARGET_COLUMN_NAME = 'Mục tiêu';
 const TASK_RESULT_LINKS_COLUMN_NAME = 'Link kết quả';
 const TASK_OUTPUT_COLUMN_NAME = 'Kết quả đầu ra';
 const TASK_NOTES_COLUMN_NAME = 'Ghi chú';
+const TASK_CREATED_BY_COLUMN_NAME = 'Người tạo';
 
 // === Cột sheet "Dự án" ===
 const PROJECT_ID_COLUMN_NAME = 'Mã dự án';
@@ -58,6 +59,14 @@ const CHAT_SHEET_NAME = 'Chat';
 const CHAT_ID_COLUMN_NAME = 'Mã chat';
 const CHAT_DATE_COLUMN_NAME = 'Ngày';
 const CHAT_JSON_COLUMN_NAME = 'Chat JSON';
+
+// === Sheet "Subtasks" ===
+const SUBTASK_SHEET_NAME = 'Subtasks';
+const SUBTASK_HEADERS = ['Mã subtask','Mã nhiệm vụ cha','Tên subtask','Người thực hiện','Trạng thái','Ngày tạo','Ngày hoàn thành','Người tạo'];
+
+// === Sheet "Comments" ===
+const COMMENT_SHEET_NAME = 'Comments';
+const COMMENT_HEADERS = ['Mã comment','Loại','Mã đối tượng','Người bình luận','Nội dung','Thời gian','Mã comment cha'];
 
 // ==================================
 // == HÀM CHÍNH (GIAO TIẾP VỚI FRONTEND) ==
@@ -212,6 +221,11 @@ function authenticateUser(email, password) {
           email: row[emailColIndex] || '',
           role: row[roleColIndex] || 'Nhân viên',
           position: row[headers.indexOf(STAFF_POSITION_COLUMN_NAME)] || '',
+          phone: row[headers.indexOf(STAFF_PHONE_COLUMN_NAME)] || '',
+          birthday: row[headers.indexOf(STAFF_BIRTHDAY_COLUMN_NAME)] ? Utilities.formatDate(new Date(row[headers.indexOf(STAFF_BIRTHDAY_COLUMN_NAME)]), Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
+          department: row[headers.indexOf(STAFF_DEPARTMENT_COLUMN_NAME)] || '',
+          bio: row[headers.indexOf(STAFF_BIO_COLUMN_NAME)] || '',
+          avatar: row[headers.indexOf(STAFF_AVATAR_COLUMN_NAME)] || '',
         };
 
         // Store session
@@ -578,10 +592,24 @@ function addTaskWithAuth(taskData) {
     const dueD   = safeParse(taskData.dueDate);
     const safeCount = Math.min(count, 52);
 
+    var stopDate = null;
+    if (taskData.recurringStopDate) {
+      try {
+        stopDate = new Date(taskData.recurringStopDate);
+        stopDate.setHours(23, 59, 59, 0);
+      } catch(e) { stopDate = null; }
+    }
+
     for (var i = 1; i <= safeCount; i++) {
       var days = interval === 'daily' ? i : interval === 'weekly' ? i * 7 : i * 30;
       var ns = startD ? new Date(startD.getTime() + days * 86400000) : null;
       var nd = dueD   ? new Date(dueD.getTime()   + days * 86400000) : null;
+
+      // Stop if the copy's start date exceeds the stop date
+      if (stopDate) {
+        var checkDate = ns || nd;
+        if (checkDate && checkDate > stopDate) break;
+      }
 
       var copyData = JSON.parse(JSON.stringify(taskData)); // deep copy
       copyData.name = taskData.name + ' (' + (i + 1) + '/' + (safeCount + 1) + ')';
@@ -784,6 +812,7 @@ function getInitialDataWithAuth() {
       chartData: data.chartData,
       recentActivities: recentActivities,
       summaryStats: data.summaryStats,
+      commentCounts: getCommentStats(),
     };
   } catch (e) {
     console.error('Error in fast load:', e);
@@ -1204,6 +1233,12 @@ function addTask(taskData) {
       : '';
     newTask[TASK_OUTPUT_COLUMN_NAME] = taskData.output ? String(taskData.output).trim() : '';
     newTask[TASK_NOTES_COLUMN_NAME] = taskData.notes ? String(taskData.notes).trim() : '';
+    // Lưu người tạo nhiệm vụ
+    const creator = getCurrentUser();
+    newTask[TASK_CREATED_BY_COLUMN_NAME] = taskData.createdBy
+      ? String(taskData.createdBy).trim()
+      : (creator ? (creator.name || '') : '');
+    newTask['Số người phụ thuộc'] = parseInt(taskData.dependentCount || 0) || 0;
 
     // Thêm vào danh sách
     currentTasks.push(newTask);
@@ -1396,6 +1431,7 @@ function updateTask(taskId, taskData) {
       : '';
     updatedTask[TASK_OUTPUT_COLUMN_NAME] = taskData.output ? String(taskData.output).trim() : '';
     updatedTask[TASK_NOTES_COLUMN_NAME] = taskData.notes ? String(taskData.notes).trim() : '';
+    updatedTask['Số người phụ thuộc'] = parseInt(taskData.dependentCount || updatedTask['Số người phụ thuộc'] || 0) || 0;
 
     projectSheet.getRange(oldProjectRow, jsonColIndex + 1).setValue(formatJSONCompact(oldTasks));
     SpreadsheetApp.flush();
@@ -2782,8 +2818,9 @@ function updateProfile(profileData) {
     SpreadsheetApp.flush();
 
     // Update session
-    if (profileData.name) currentUser.name = profileData.name;
-    if (profileData.position) currentUser.position = profileData.position;
+    Object.keys(profileData).forEach(function(field) {
+      if (profileData[field] !== undefined) currentUser[field] = profileData[field];
+    });
     storeUserSession(currentUser);
 
     return { success: true, message: 'Cập nhật hồ sơ thành công' };
@@ -2864,141 +2901,187 @@ function uploadAvatar(base64Data, mimeType) {
 }
 
 // ============================================================
-// === HÀM TẠO DỮ LIỆU MẪU "QLDA Project" ===
-// Chạy hàm này 1 lần từ GAS Editor (Tools > Run function > seedQldaProject)
+// == SUBTASKS & COMMENTS — Data Layer
 // ============================================================
-function seedQldaProject() {
-  // 1. Tạo dự án
-  const projectResult = addProject({
-    name: 'QLDA Project',
-    description: 'Dự án xây dựng hệ thống quản lý dự án nội bộ – theo dõi nhiệm vụ, thành viên và tiến độ.',
-    manager: '',
-    startDate: '2026-04-01',
-    endDate: '2026-12-31',
-    status: 'Đang thực hiện',
-  });
 
-  if (!projectResult.success) {
-    Logger.log('Tạo dự án thất bại: ' + projectResult.error);
-    return;
+function _getOrCreateSubtaskSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(SUBTASK_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(SUBTASK_SHEET_NAME);
+    sh.getRange(1, 1, 1, SUBTASK_HEADERS.length).setValues([SUBTASK_HEADERS]);
+    sh.setFrozenRows(1);
   }
-
-  const pid = projectResult.projectId;
-  Logger.log('Đã tạo dự án: ' + pid);
-
-  // 2. Danh sách nhiệm vụ
-  const tasks = [
-    // --- Chưa bắt đầu ---
-    {
-      name: 'Thiết kế giao diện mobile responsive',
-      description: 'Cải thiện giao diện để hiển thị tốt trên thiết bị di động.',
-      status: 'Chưa bắt đầu', priority: 'Cao',
-      startDate: '2026-05-01', dueDate: '2026-05-20', completion: 0,
-    },
-    {
-      name: 'Viết tài liệu hướng dẫn sử dụng',
-      description: 'Soạn thảo tài liệu chi tiết cho người dùng cuối.',
-      status: 'Chưa bắt đầu', priority: 'Trung bình',
-      startDate: '2026-05-15', dueDate: '2026-06-01', completion: 0,
-    },
-    {
-      name: 'Tích hợp thông báo email tự động',
-      description: 'Gửi email nhắc nhở khi nhiệm vụ sắp đến hạn.',
-      status: 'Chưa bắt đầu', priority: 'Thấp',
-      startDate: '2026-06-01', dueDate: '2026-06-30', completion: 0,
-    },
-    // --- Đang thực hiện ---
-    {
-      name: 'Phát triển tính năng báo cáo thống kê',
-      description: 'Biểu đồ tổng hợp tiến độ dự án và nhiệm vụ.',
-      status: 'Đang thực hiện', priority: 'Cao',
-      startDate: '2026-04-10', dueDate: '2026-05-10', completion: 45,
-    },
-    {
-      name: 'Tối ưu hóa truy vấn Google Sheets',
-      description: 'Giảm số lần đọc/ghi sheet để cải thiện tốc độ.',
-      status: 'Đang thực hiện', priority: 'Trung bình',
-      startDate: '2026-04-05', dueDate: '2026-04-30', completion: 60,
-    },
-    {
-      name: 'Kiểm thử chức năng Kanban Board',
-      description: 'Viết test case và kiểm tra toàn bộ luồng kéo thả.',
-      status: 'Đang thực hiện', priority: 'Cao',
-      startDate: '2026-04-12', dueDate: '2026-04-25', completion: 75,
-    },
-    // --- Telegram Bot Integration ---
-    {
-      name: 'Kết nối Telegram Bot API với GAS',
-      description: 'Thiết lập webhook Telegram, xác thực token và gọi API gửi/nhận tin nhắn từ Google Apps Script.',
-      status: 'Chưa bắt đầu', priority: 'Cao',
-      startDate: '2026-05-01', dueDate: '2026-05-15', completion: 0,
-    },
-    {
-      name: 'Lệnh /tasks – Xem danh sách nhiệm vụ qua Telegram',
-      description: 'Bot trả về danh sách nhiệm vụ đang được giao cho người dùng khi họ gõ /tasks.',
-      status: 'Chưa bắt đầu', priority: 'Cao',
-      startDate: '2026-05-10', dueDate: '2026-05-25', completion: 0,
-    },
-    {
-      name: 'Lệnh /done – Đánh dấu hoàn thành nhiệm vụ qua Telegram',
-      description: 'User gõ /done <ID> để cập nhật trạng thái nhiệm vụ mà không cần mở web app.',
-      status: 'Chưa bắt đầu', priority: 'Trung bình',
-      startDate: '2026-05-20', dueDate: '2026-06-05', completion: 0,
-    },
-    {
-      name: 'Thông báo nhắc nhiệm vụ sắp hết hạn qua Telegram',
-      description: 'Trigger tự động chạy hàng ngày, gửi nhắc nhở qua Telegram khi nhiệm vụ còn 1–3 ngày.',
-      status: 'Đang thực hiện', priority: 'Cao',
-      startDate: '2026-04-15', dueDate: '2026-05-05', completion: 35,
-    },
-    {
-      name: 'Xác thực Telegram ID với tài khoản QLDA',
-      description: 'Liên kết Telegram user ID với mã nhân viên trong hệ thống để phân quyền lệnh bot.',
-      status: 'Đang thực hiện', priority: 'Cao',
-      startDate: '2026-04-20', dueDate: '2026-05-10', completion: 20,
-    },
-    {
-      name: 'Deploy Telegram Bot lên VPS production',
-      description: 'Cài đặt, cấu hình và chạy ổn định Telegram Bot trên VPS, kiểm thử end-to-end.',
-      status: 'Hoàn thành', priority: 'Trung bình',
-      startDate: '2026-04-01', dueDate: '2026-04-15', completion: 100,
-      reportDate: '2026-04-14',
-    },
-    // --- Hoàn thành ---
-    {
-      name: 'Xây dựng module quản lý dự án cơ bản',
-      description: 'Tạo/sửa/xóa dự án, gán thành viên.',
-      status: 'Hoàn thành', priority: 'Cao',
-      startDate: '2026-03-01', dueDate: '2026-03-31', completion: 100,
-      reportDate: '2026-03-28',
-    },
-    {
-      name: 'Triển khai hệ thống xác thực người dùng',
-      description: 'Đăng nhập bằng mã nhân viên + mật khẩu, token session.',
-      status: 'Hoàn thành', priority: 'Cao',
-      startDate: '2026-03-05', dueDate: '2026-03-25', completion: 100,
-      reportDate: '2026-03-24',
-    },
-    {
-      name: 'Thiết lập cấu trúc Google Spreadsheet',
-      description: 'Tạo các sheet Dự án, Người dùng, Thông báo với đúng headers.',
-      status: 'Hoàn thành', priority: 'Trung bình',
-      startDate: '2026-02-15', dueDate: '2026-03-01', completion: 100,
-      reportDate: '2026-02-28',
-    },
-  ];
-
-  let successCount = 0;
-  for (const t of tasks) {
-    const r = addTask({ ...t, projectId: pid });
-    if (r.success) {
-      successCount++;
-      Logger.log('  + Task: ' + t.name + ' [' + t.status + '] => ' + r.taskId);
-    } else {
-      Logger.log('  ! Lỗi task "' + t.name + '": ' + r.error);
-    }
-  }
-
-  Logger.log('===== Hoàn thành: ' + successCount + '/' + tasks.length + ' nhiệm vụ đã tạo =====');
-  Logger.log('Mở app và kiểm tra dự án: ' + pid);
+  return sh;
 }
+
+function _getOrCreateCommentSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(COMMENT_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(COMMENT_SHEET_NAME);
+    sh.getRange(1, 1, 1, COMMENT_HEADERS.length).setValues([COMMENT_HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/**
+ * Returns comment counts per user: { 'Tên': { total: N, today: M } }
+ * Used to award Comment XP on the client side.
+ */
+function getCommentStats() {
+  try {
+    var sh = _getOrCreateCommentSheet();
+    if (sh.getLastRow() < 2) return {};
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, COMMENT_HEADERS.length).getValues();
+    var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    var counts = {};
+    rows.forEach(function(r) {
+      var author = String(r[3] || '').trim(); // col 4: Người bình luận
+      if (!author) return;
+      var rawTime = r[5]; // col 6: Thời gian
+      var dateStr = rawTime instanceof Date
+        ? Utilities.formatDate(rawTime, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : String(rawTime || '').slice(0, 10);
+      if (!counts[author]) counts[author] = { total: 0, today: 0 };
+      counts[author].total++;
+      if (dateStr === today) counts[author].today++;
+    });
+    return counts;
+  } catch(e) {
+    console.error('getCommentStats error:', e);
+    return {};
+  }
+}
+
+function _parseSheetRows(sh) {
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return [];
+  var headers = data[0];
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) obj[headers[j]] = data[i][j];
+    rows.push(obj);
+  }
+  return rows;
+}
+
+// ---- Subtask CRUD ----
+
+function getSubtasks(taskId) {
+  var sh = _getOrCreateSubtaskSheet();
+  var rows = _parseSheetRows(sh);
+  return { success: true, subtasks: rows.filter(function(r) { return r['Mã nhiệm vụ cha'] === taskId; }) };
+}
+
+function addSubtask(subtaskData) {
+  try {
+    var user = getCurrentUser();
+    if (!user) return { success: false, error: 'Chưa đăng nhập' };
+    var sh = _getOrCreateSubtaskSheet();
+    var tz = Session.getScriptTimeZone();
+    var now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+    var lastRow = sh.getLastRow();
+    var id = 'ST-' + (lastRow < 1 ? '001' : ('000' + lastRow).slice(-3));
+    sh.appendRow([
+      id,
+      subtaskData.taskId || '',
+      subtaskData.name || '',
+      subtaskData.assignee || '',
+      subtaskData.status || 'Chưa bắt đầu',
+      now,
+      '',
+      user.name || ''
+    ]);
+    return { success: true, subtaskId: id };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+
+function updateSubtask(subtaskId, updateData) {
+  try {
+    var sh = _getOrCreateSubtaskSheet();
+    var data = sh.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === subtaskId) {
+        var row = i + 1;
+        if (updateData.name    !== undefined) sh.getRange(row, 3).setValue(updateData.name);
+        if (updateData.assignee !== undefined) sh.getRange(row, 4).setValue(updateData.assignee);
+        if (updateData.status  !== undefined) {
+          sh.getRange(row, 5).setValue(updateData.status);
+          if (updateData.status.toLowerCase().includes('hoàn thành')) {
+            var tz = Session.getScriptTimeZone();
+            sh.getRange(row, 7).setValue(Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss'));
+          }
+        }
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Không tìm thấy subtask' };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+
+function deleteSubtask(subtaskId) {
+  try {
+    var sh = _getOrCreateSubtaskSheet();
+    var data = sh.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (data[i][0] === subtaskId) { sh.deleteRow(i + 1); return { success: true }; }
+    }
+    return { success: false, error: 'Không tìm thấy subtask' };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+
+// ---- Comment CRUD ----
+
+function getComments(type, objectId) {
+  var sh = _getOrCreateCommentSheet();
+  var rows = _parseSheetRows(sh);
+  return { success: true, comments: rows.filter(function(r) {
+    return r['Loại'] === type && r['Mã đối tượng'] === objectId;
+  })};
+}
+
+function addComment(commentData) {
+  try {
+    var user = getCurrentUser();
+    if (!user) return { success: false, error: 'Chưa đăng nhập' };
+    var sh = _getOrCreateCommentSheet();
+    var tz = Session.getScriptTimeZone();
+    var now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+    var lastRow = sh.getLastRow();
+    var id = 'CM-' + Utilities.formatDate(new Date(), tz, 'yyyyMMddHHmmss') + '-' + (lastRow || 0);
+    sh.appendRow([
+      id,
+      commentData.type || 'task',
+      commentData.objectId || '',
+      user.name || '',
+      commentData.content || '',
+      now,
+      commentData.parentId || ''
+    ]);
+    return { success: true, commentId: id };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+
+function deleteComment(commentId) {
+  try {
+    var user = getCurrentUser();
+    if (!user) return { success: false, error: 'Chưa đăng nhập' };
+    var sh = _getOrCreateCommentSheet();
+    var data = sh.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (data[i][0] === commentId) {
+        // Only comment author or admin can delete
+        if (data[i][3] !== user.name && !isAdmin(user)) {
+          return { success: false, error: 'Không có quyền xóa bình luận này' };
+        }
+        sh.deleteRow(i + 1);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Không tìm thấy comment' };
+  } catch(e) { return { success: false, error: e.message }; }
+}
+

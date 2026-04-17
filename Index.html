@@ -68,6 +68,7 @@
                 <div class="flex items-center gap-2">
                   <p id="user-role" class="text-xs text-gray-600"></p>
                   <span id="user-streak-badge" class="streak-badge hidden">🔥1</span>
+                  <span id="user-combo-badge" class="combo-badge hidden">🔥 x1.2</span>
                 </div>
                 <!-- XP progress bar -->
                 <div class="xp-bar-wrap mt-1">
@@ -874,164 +875,157 @@
               <table class="w-full border-collapse">
                 <thead>
                   <tr class="bg-gray-50">
-                    <th
-                      class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900"
-                    >
+                    <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900">
                       Chức năng
                     </th>
                     <th class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="flex items-center justify-center">
-                        <i class="fas fa-crown text-orange-500 mr-2"></i>
+                      <div class="flex items-center justify-center gap-1">
+                        <i class="fas fa-crown text-orange-500"></i>
                         <span class="font-semibold text-orange-600">ADMIN</span>
                       </div>
+                      <div class="text-xs text-gray-400 font-normal mt-0.5">Quản trị viên</div>
                     </th>
                     <th class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="flex items-center justify-center">
-                        <i class="fas fa-user-tie text-blue-500 mr-2"></i>
-                        <span class="font-semibold text-blue-600">QUẢN LÝ</span>
+                      <div class="flex items-center justify-center gap-1">
+                        <i class="fas fa-chess-king text-amber-500"></i>
+                        <span class="font-semibold text-amber-600">QUẢN LÝ</span>
                       </div>
+                      <div class="text-xs text-gray-400 font-normal mt-0.5">📊 Lv.8–13</div>
                     </th>
                     <th class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="flex items-center justify-center">
-                        <i class="fas fa-user text-green-500 mr-2"></i>
-                        <span class="font-semibold text-green-600">NHÂN VIÊN</span>
+                      <div class="flex items-center justify-center gap-1">
+                        <i class="fas fa-users text-purple-500"></i>
+                        <span class="font-semibold text-purple-600">TRƯỞNG NHÓM</span>
                       </div>
+                      <div class="text-xs text-gray-400 font-normal mt-0.5">👥 Lv.5–7</div>
+                    </th>
+                    <th class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="flex items-center justify-center gap-1">
+                        <i class="fas fa-user text-blue-500"></i>
+                        <span class="font-semibold text-blue-600">NHÂN VIÊN</span>
+                      </div>
+                      <div class="text-xs text-gray-400 font-normal mt-0.5">👨‍💻 Lv.1–4</div>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   <!-- Dự án -->
-                  <tr class="bg-blue-50">
-                    <td
-                      colspan="4"
-                      class="border border-gray-200 px-4 py-2 font-semibold text-blue-800 bg-blue-100"
-                    >
+                  <tr>
+                    <td colspan="5" class="border border-gray-200 px-4 py-2 font-semibold text-blue-800 bg-blue-100">
                       <i class="fas fa-folder-open mr-2"></i>QUẢN LÝ DỰ ÁN
                     </td>
                   </tr>
                   <tr>
                     <td class="border border-gray-200 px-4 py-3 text-sm">Tạo dự án mới</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="text-xs text-gray-500 mt-1">Chỉ tạo cho bản thân phụ trách</div>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-times text-red-500 text-lg"></i>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ trong nhóm mình</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Xem tất cả dự án</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-times text-red-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-times text-red-500 text-lg"></i>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ dự án của nhóm</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
                   </tr>
                   <tr>
-                    <td class="border border-gray-200 px-4 py-3 text-sm">
-                      Sửa/xóa dự án được phân công
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="text-xs text-gray-500 mt-1">Chỉ sửa được trạng thái dự án</div>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Sửa/xóa dự án được phân công</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ sửa trạng thái</div></td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Sao chép dự án</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-times text-red-500 text-lg"></i>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                  </tr>
+                  <tr>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Quản lý nhân viên</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ xem</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
                   </tr>
 
                   <!-- Nhiệm vụ -->
-                  <tr class="bg-emerald-50">
-                    <td
-                      colspan="4"
-                      class="border border-gray-200 px-4 py-2 font-semibold text-emerald-800 bg-emerald-100"
-                    >
+                  <tr>
+                    <td colspan="5" class="border border-gray-200 px-4 py-2 font-semibold text-emerald-800 bg-emerald-100">
                       <i class="fas fa-tasks mr-2"></i>QUẢN LÝ NHIỆM VỤ
                     </td>
                   </tr>
-                  <tr>
+                  <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Tạo nhiệm vụ mới</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="text-xs text-gray-500 mt-1">Trong dự án được giao</div>
-                    </td>
-                  </tr>
-                  <tr class="bg-gray-50">
-                    <td class="border border-gray-200 px-4 py-3 text-sm">
-                      Giao việc cho người khác
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="text-xs text-gray-500 mt-1">Nếu là người phụ trách dự án</div>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong dự án được giao</div></td>
                   </tr>
                   <tr>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Giao việc cho người khác</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong nhóm mình</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Nếu phụ trách dự án</div></td>
+                  </tr>
+                  <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Xem tất cả nhiệm vụ</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-times text-red-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-times text-red-500 text-lg"></i>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong nhóm mình</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong nhóm &amp; dự án mình tham gia</div></td>
+                  </tr>
+                  <tr>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Sửa/xóa nhiệm vụ của mình</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
                   </tr>
                   <tr class="bg-gray-50">
-                    <td class="border border-gray-200 px-4 py-3 text-sm">
-                      Sửa/xóa nhiệm vụ của mình
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Sao chép nhiệm vụ</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Nếu phụ trách dự án</div></td>
+                  </tr>
+
+                  <!-- Thành tích -->
+                  <tr>
+                    <td colspan="5" class="border border-gray-200 px-4 py-2 font-semibold text-purple-800 bg-purple-100">
+                      <i class="fas fa-trophy mr-2"></i>THÀNH TÍCH &amp; XP
                     </td>
                   </tr>
                   <tr>
-                    <td class="border border-gray-200 px-4 py-3 text-sm">Sao chép nhiệm vụ</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <i class="fas fa-check text-green-500 text-lg"></i>
-                    </td>
-                    <td class="border border-gray-200 px-4 py-3 text-center">
-                      <div class="text-xs text-gray-500 mt-1">Nếu là người phụ trách dự án</div>
-                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Xem bảng xếp hạng</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                  </tr>
+                  <tr class="bg-gray-50">
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Nhận huy hiệu &amp; lên cấp</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                  </tr>
+                  <tr>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Broadcast thông báo nhóm</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ nhóm mình</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                  </tr>
+                  <tr class="bg-gray-50">
+                    <td class="border border-gray-200 px-4 py-3 text-sm">Cấu hình hệ thống</td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
                   </tr>
                 </tbody>
               </table>
@@ -1062,57 +1056,33 @@
         </div>
 
         <!-- Achievements Section -->
-        <div id="achievements-section" class="section">
+        <div id="achievements-section" class="section gm-section">
+
+          <!-- ── Header ── -->
           <div class="flex items-center justify-between mb-6">
-            <h3 class="text-2xl font-bold text-gray-900">Thành tích &amp; Bảng xếp hạng</h3>
+            <div>
+              <h3 class="text-2xl font-bold text-gray-900">🏆 Thành tích &amp; Bảng xếp hạng</h3>
+              <p class="text-sm text-gray-500 mt-1">Theo dõi tiến độ, so sánh thành tích và nhận huy hiệu</p>
+            </div>
           </div>
 
-          <!-- Daily Quests -->
+          <!-- ── My Profile Hero Card (rendered by JS) ── -->
+          <div id="my-profile-hero" class="mb-6 gm-hero-slot"></div>
+
+          <!-- ── Daily Quests ── -->
           <div class="glass-card mb-6">
             <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <span class="text-2xl">🎯</span> Nhiệm vụ hàng ngày
               <span id="quest-date" class="text-xs font-normal text-gray-400 ml-2"></span>
             </h4>
-            <div id="daily-quests-list" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div id="daily-quests-list" class="grid grid-cols-1 md:grid-cols-3 gap-3 gm-quest-grid">
               <div class="quest-card"><div class="quest-icon">⏳</div><span class="text-sm text-gray-400">Đang tải...</span></div>
             </div>
           </div>
 
-          <!-- Scoring Guide -->
-          <div class="glass-card mb-6">
-            <h4 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <i class="fas fa-star text-yellow-500 mr-2"></i>Cách tích điểm
-            </h4>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h5 class="font-medium text-gray-700 mb-3">Hoạt động tích điểm</h5>
-                <ul class="space-y-2 text-sm text-gray-600">
-                  <li class="flex justify-between"><span>Hoàn thành nhiệm vụ</span><span class="font-semibold text-green-600">+5 ⭐</span></li>
-                  <li class="flex justify-between"><span>Hoàn thành trước hạn</span><span class="font-semibold text-blue-600">+3 ⭐ bonus</span></li>
-                  <li class="flex justify-between"><span>Tạo nhiệm vụ mới</span><span class="font-semibold text-purple-600">+1 ⭐</span></li>
-                  <li class="flex justify-between"><span>Tham gia dự án</span><span class="font-semibold text-indigo-600">+2 ⭐</span></li>
-                </ul>
-              </div>
-              <div>
-                <h5 class="font-medium text-gray-700 mb-3">Bảng huy chương</h5>
-                <table class="w-full text-sm">
-                  <thead><tr class="bg-gray-50"><th class="text-left p-2">Huy chương</th><th class="text-right p-2">Điểm yêu cầu</th></tr></thead>
-                  <tbody>
-                    <tr><td class="p-2">🌱 Mới bắt đầu</td><td class="text-right p-2">10 ⭐</td></tr>
-                    <tr class="bg-gray-50"><td class="p-2">⚡ Năng động</td><td class="text-right p-2">25 ⭐</td></tr>
-                    <tr><td class="p-2">🔥 Nhiệt huyết</td><td class="text-right p-2">50 ⭐</td></tr>
-                    <tr class="bg-gray-50"><td class="p-2">💎 Xuất sắc</td><td class="text-right p-2">100 ⭐</td></tr>
-                    <tr><td class="p-2">👑 Huyền thoại</td><td class="text-right p-2">200 ⭐</td></tr>
-                    <tr class="bg-gray-50"><td class="p-2">🚀 Siêu sao</td><td class="text-right p-2">500 ⭐</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          <!-- Leaderboard -->
-          <div id="achievements-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div class="loading-card">Đang tải thành tích...</div>
+          <!-- ── Achievements grid (My Badges + Leaderboard, rendered by JS) ── -->
+          <div id="achievements-grid" class="gm-root grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div class="loading-card" style="grid-column:1/-1;">Đang tải thành tích...</div>
           </div>
         </div>
 

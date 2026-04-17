@@ -7,6 +7,7 @@
   let allProjects = [];
   let allTasks = [];
   let allStaff = [];
+  let allCommentCounts = {}; // { 'TênUser': { total: N, today: M } }
   let currentSection = 'overview';
   let currentUser = null; // Store current logged in user
   let isAuthenticated = false;
@@ -46,6 +47,8 @@
     T_NOTES: 'Ghi chú',
     T_RECURRING: 'Lặp lại',
     T_RECURRING_INTERVAL: 'Chu kỳ lặp',
+    T_CREATOR: 'Người tạo',
+    T_DEPENDENT_COUNT: 'Số người phụ thuộc',
     S_ID: 'Mã NV',
     S_NAME: 'Họ tên',
     S_EMAIL: 'Email',
@@ -67,34 +70,142 @@
   // ============================================================
 
   const LEVELS = [
-    { level: 1, name: 'Newbie',       icon: '🌱', minXP: 0,    maxXP: 49   },
-    { level: 2, name: 'Học việc',     icon: '📚', minXP: 50,   maxXP: 149  },
-    { level: 3, name: 'Nhân viên',    icon: '💼', minXP: 150,  maxXP: 349  },
-    { level: 4, name: 'Chuyên viên',  icon: '⚡', minXP: 350,  maxXP: 699  },
-    { level: 5, name: 'Cao thủ',      icon: '🔥', minXP: 700,  maxXP: 1199 },
-    { level: 6, name: 'Chuyên gia',   icon: '💎', minXP: 1200, maxXP: 1999 },
-    { level: 7, name: 'Master',       icon: '👑', minXP: 2000, maxXP: 3499 },
-    { level: 8, name: 'Huyền thoại',  icon: '🚀', minXP: 3500, maxXP: 99999 },
+    { level:  1, name: 'Thực tập',          icon: '🌱', tier: 'execution',    minXP: 0,     role: 'Làm quen hệ thống, nhận task'        },
+    { level:  2, name: 'Nhân viên',         icon: '📚', tier: 'execution',    minXP: 150,   role: 'Thực hiện task theo yêu cầu'          },
+    { level:  3, name: 'Chuyên viên',       icon: '💼', tier: 'execution',    minXP: 400,   role: 'Làm task độc lập, ổn định'            },
+    { level:  4, name: 'Senior',            icon: '⚡', tier: 'execution',    minXP: 800,   role: 'Xử lý task phức tạp, làm đều'         },
+    { level:  5, name: 'Team Leader',       icon: '🔥', tier: 'coordination', minXP: 1400,  role: 'Giao task, hỗ trợ team'               },
+    { level:  6, name: 'Coordinator',       icon: '💎', tier: 'coordination', minXP: 2200,  role: 'Theo dõi tiến độ, điều phối'          },
+    { level:  7, name: 'Project Leader',    icon: '🎯', tier: 'coordination', minXP: 3200,  role: 'Quản lý nhóm nhỏ'                     },
+    { level:  8, name: 'Project Manager',   icon: '🏆', tier: 'management',   minXP: 4500,  role: 'Quản lý 1 dự án'                      },
+    { level:  9, name: 'Senior PM',         icon: '🌟', tier: 'management',   minXP: 6000,  role: 'Quản lý dự án lớn'                    },
+    { level: 10, name: 'Program Manager',   icon: '👑', tier: 'management',   minXP: 8000,  role: 'Quản lý nhiều dự án'                  },
+    { level: 11, name: 'Portfolio Manager', icon: '🚀', tier: 'leadership',   minXP: 11000, role: 'Quản lý danh mục dự án'               },
+    { level: 12, name: 'Director',          icon: '⭐', tier: 'leadership',   minXP: 15000, role: 'Quyết định chiến lược'                },
+    { level: 13, name: 'Head',              icon: '🏅', tier: 'leadership',   minXP: 20000, role: 'Lãnh đạo hệ thống'                    },
   ];
 
-  const TASK_XP = {
-    'Thấp': 8, 'Trung bình': 15, 'Cao': 25, 'Khẩn cấp': 35,
-    'default': 15
+  const CAREER_TIERS = {
+    execution:    { name: '👨‍💻 Thực Thi',   color: '#3b82f6', bg: '#eff6ff', levels: [1,2,3,4]   },
+    coordination: { name: '👥 Điều Phối',  color: '#8b5cf6', bg: '#f5f3ff', levels: [5,6,7]     },
+    management:   { name: '📊 Quản Lý',    color: '#f59e0b', bg: '#fffbeb', levels: [8,9,10]    },
+    leadership:   { name: '🧠 Chiến Lược', color: '#ef4444', bg: '#fef2f2', levels: [11,12,13]  },
   };
-  const ONTIME_BONUS_XP = 15;
-  const CREATE_TASK_XP = 2;
+
+  // Badge → Tier mapping for roadmap display
+  const TIER_BADGE_MAP = {
+    execution:    ['hoan_thanh', 'lam_deu'],
+    coordination: ['giao_viec',  'ho_tro'],
+    management:   ['dung_han',   'quan_ly'],
+    leadership:   ['anh_huong',  'xuat_sac'],
+  };
+
+  // Hybrid level-gate requirements (hard: Lv5 & Lv8, visual: Lv11)
+  const LEVEL_REQUIREMENTS = {
+    5:  { hard: true,  badges: [{id:'hoan_thanh',lv:3},{id:'lam_deu',lv:2},{id:'giao_viec',lv:1}] },
+    8:  { hard: true,  badges: [{id:'giao_viec', lv:3},{id:'ho_tro', lv:2},{id:'dung_han', lv:2}] },
+    11: { hard: false, badges: [{id:'quan_ly',   lv:2},{id:'ho_tro', lv:3},{id:'dung_han', lv:3}] },
+  };
+
+  // Badge boost multipliers (additive, capped)
+  const BADGE_BOOSTS = [
+    { id: 'hoan_thanh', minLv: 3, bonus: 0.10 },
+    { id: 'lam_deu',    minLv: 3, bonus: 0.10 },
+    { id: 'ho_tro',     minLv: 2, bonus: 0.05 },
+  ];
+  const MAX_BADGE_BOOST_MULT = 1.30;
+
+  // Base XP by difficulty: easy=10, medium=20, hard=40, very hard=80
+  const TASK_XP = {
+    'Thấp': 10, 'Trung bình': 20, 'Cao': 40, 'Khẩn cấp': 80,
+    'default': 20
+  };
+  const CREATE_TASK_XP = 10;
+  const ASSIGN_COMPLETE_ASSIGNER_XP = 20;
+  const ASSIGN_COMPLETE_COMPLETER_XP = 10;
+  const COMMENT_XP = 5;
+  const COMMENT_XP_CAP_PER_DAY = 10;   // max comments/day counted for XP
+  const COMMENT_XP_LIFETIME_CAP = 200; // max total comment XP contribution (from all comments)
+
+  // Timing multipliers
+  const EARLY_BONUS_MULT   = 1.5;  // +50% if done early
+  const ONTIME_BONUS_MULT  = 1.2;  // +20% if done on-time
+  const LATE_PENALTY_MULT  = 0.7;  // -30% if late
+
+  // Combo multipliers (tasks completed in one day)
+  const COMBO_TABLE = [
+    { tasks: 10, mult: 2.0 },
+    { tasks: 5,  mult: 1.5 },
+    { tasks: 3,  mult: 1.2 },
+  ];
+
+  const RUNTIME_XP_STATE = {};
+
+  function normalizePriority(priority) {
+    var p = (priority || '').toLowerCase().trim();
+    if (!p) return 'default';
+    if (p.includes('khẩn')) return 'Khẩn cấp';
+    if (p.includes('cao') || p.includes('hard')) return 'Cao';
+    if (p.includes('trung') || p.includes('medium')) return 'Trung bình';
+    if (p.includes('thấp') || p.includes('easy')) return 'Thấp';
+    if (p.includes('very hard')) return 'Khẩn cấp';
+    return 'default';
+  }
 
   function getTaskXP(task) {
-    var priority = (task[COL.T_PRIORITY] || '').trim();
+    var priority = normalizePriority(task[COL.T_PRIORITY]);
     return TASK_XP[priority] || TASK_XP['default'];
+  }
+
+  function getTaskTimingMultiplier(due, done) {
+    if (!due || !done) return 1;
+    var diffDays = Math.floor((due.getTime() - done.getTime()) / 86400000);
+    if (diffDays >= 1) return EARLY_BONUS_MULT;
+    if (done <= due) return ONTIME_BONUS_MULT;
+    return LATE_PENALTY_MULT;
+  }
+
+  // calculateXP: base XP × timing multiplier × impact multiplier (dependentCount)
+  function calculateXP(task, doneDateOverride) {
+    var base = getTaskXP(task);
+    var due  = task[COL.T_DUE]         ? new Date(task[COL.T_DUE])         : null;
+    var done = doneDateOverride ? new Date(doneDateOverride) : (task[COL.T_REPORT_DATE] ? new Date(task[COL.T_REPORT_DATE]) : null);
+    base = Math.round(base * getTaskTimingMultiplier(due, done));
+    var dep = Math.min(parseInt(task[COL.T_DEPENDENT_COUNT] || task.dependentCount || 0), 20); // anti-cheat cap
+    var impactMult = Math.min(1 + dep * 0.1, 3.0);
+    base = Math.round(base * impactMult);
+    return Math.max(1, base);
+  }
+
+  function getComboMultiplier(taskCount) {
+    for (var i = 0; i < COMBO_TABLE.length; i++) {
+      if (taskCount >= COMBO_TABLE[i].tasks) return COMBO_TABLE[i].mult;
+    }
+    return 1.0;
   }
 
   function getLevelInfo(xp) {
     var lvl = LEVELS[0];
+    var idx = 0;
     for (var i = LEVELS.length - 1; i >= 0; i--) {
-      if (xp >= LEVELS[i].minXP) { lvl = LEVELS[i]; break; }
+      if (xp >= LEVELS[i].minXP) { lvl = LEVELS[i]; idx = i; break; }
     }
-    return lvl;
+    var nextLevel = LEVELS[idx + 1] || null;
+    var xpInLevel = xp - lvl.minXP;
+    var xpNeeded  = nextLevel ? (nextLevel.minXP - lvl.minXP) : 1;
+    var progress  = nextLevel ? Math.min(100, Math.round(xpInLevel / xpNeeded * 100)) : 100;
+    var tier = CAREER_TIERS[lvl.tier] || CAREER_TIERS.execution;
+    // Compute gate info for the NEXT level (if any gate requirement exists)
+    var nextLevelNum = idx + 2; // next level is (idx+1), 1-indexed = idx+2
+    var gateInfo = LEVEL_REQUIREMENTS[nextLevelNum] || null;
+    return Object.assign({}, lvl, { nextLevel: nextLevel, xpInLevel: xpInLevel, xpNeeded: xpNeeded, progress: progress, tierInfo: tier, gateInfo: gateInfo });
+  }
+
+  function _dayKey(d) {
+    if (!d) return '';
+    var c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c.toISOString().slice(0, 10);
   }
 
   function computeUserGameStats(staffName) {
@@ -103,49 +214,144 @@
           && t[COL.T_ASSIGNEE] === staffName;
     });
 
-    // Compute XP
     var xp = 0;
+    var onTimeCount = 0;
+    var earlyCount  = 0;
+    var lateCount   = 0;
+    var perDay = {};
+
     completedTasks.forEach(function(t) {
-      xp += getTaskXP(t);
+      var taskXP = calculateXP(t);
+      xp += taskXP;
+
       var due  = t[COL.T_DUE]  ? new Date(t[COL.T_DUE]) : null;
       var done = t[COL.T_REPORT_DATE] ? new Date(t[COL.T_REPORT_DATE]) : null;
-      if (due && done && done <= due) xp += ONTIME_BONUS_XP;
-    });
-    var createdTasks = allTasks.filter(function(t) { return t[COL.T_ASSIGNEE] === staffName; });
-    xp += Math.min(createdTasks.length, 20) * CREATE_TASK_XP;
 
-    // Compute streak: consecutive days with ≥1 completed task, going back from today
+      if (due && done) {
+        if (done <= due) onTimeCount++;
+        var diffDays = Math.floor((due.getTime() - done.getTime()) / 86400000);
+        if (diffDays >= 1) earlyCount++;
+        if (done > due) lateCount++;
+      }
+
+      var day = _dayKey(done);
+      if (day) {
+        if (!perDay[day]) perDay[day] = { count: 0, baseXP: 0 };
+        perDay[day].count += 1;
+        perDay[day].baseXP += taskXP;
+      }
+
+      // +10 XP bố sung nếu task do người khác tạo và giao cho mình
+      var creator = t[COL.T_CREATOR] || '';
+      if (creator && creator !== staffName) xp += ASSIGN_COMPLETE_COMPLETER_XP;
+    });
+
+    var comboBonusXP = 0;
+    var bestComboMult = 1;
+    var bestComboCount = 0;
+    var todayKey = _dayKey(new Date());
+    var todayCompletedCount = 0;
+    var todayComboMult = 1;
+
+    Object.keys(perDay).forEach(function(day) {
+      var dayInfo = perDay[day];
+      var mult = getComboMultiplier(dayInfo.count);
+      if (mult > 1) comboBonusXP += Math.round(dayInfo.baseXP * (mult - 1));
+      if (mult > bestComboMult) {
+        bestComboMult = mult;
+        bestComboCount = dayInfo.count;
+      }
+      if (day === todayKey) {
+        todayCompletedCount = dayInfo.count;
+        todayComboMult = mult;
+      }
+    });
+
+    xp += comboBonusXP;
+
+    // +10 XP cho mỗi task do mình tạo (CREATE_TASK_XP)
+    var createdTasks = allTasks.filter(function(t) { return (t[COL.T_CREATOR] || '') === staffName; });
+    xp += createdTasks.length * CREATE_TASK_XP;
+
+    // +20 XP cho mỗi task do mình giao cho người khác và họ đã hoàn thành
+    var assignerBonusTasks = allTasks.filter(function(t) {
+      return (t[COL.T_CREATOR] || '') === staffName
+          && (t[COL.T_ASSIGNEE] || '') !== staffName
+          && (t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành');
+    });
+    xp += assignerBonusTasks.length * ASSIGN_COMPLETE_ASSIGNER_XP;
+
+    // Fallback for old tasks without T_CREATOR: count assigned tasks (capped at 20)
+    if (createdTasks.length === 0) {
+      var legacyTasks = allTasks.filter(function(t) { return !t[COL.T_CREATOR] && t[COL.T_ASSIGNEE] === staffName; });
+      xp += Math.min(legacyTasks.length, 20) * CREATE_TASK_XP;
+    }
+
+    // Compute streak
     var today = new Date(); today.setHours(0,0,0,0);
     var completionDays = new Set();
     completedTasks.forEach(function(t) {
       var rd = t[COL.T_REPORT_DATE];
-      if (rd) {
-        var d = new Date(rd); d.setHours(0,0,0,0);
-        completionDays.add(d.getTime());
-      }
+      if (rd) { var d = new Date(rd); d.setHours(0,0,0,0); completionDays.add(d.getTime()); }
     });
     var streak = 0;
     var check = new Date(today);
-    // If didn't complete today, start check from yesterday (streak might still be alive)
     if (!completionDays.has(check.getTime())) check.setDate(check.getDate() - 1);
-    while (completionDays.has(check.getTime())) {
-      streak++;
-      check.setDate(check.getDate() - 1);
-    }
+    while (completionDays.has(check.getTime())) { streak++; check.setDate(check.getDate() - 1); }
 
-    // Today stats
     var todayStr = today.toISOString().slice(0, 10);
     var completedToday = completedTasks.filter(function(t) {
       return (t[COL.T_REPORT_DATE] || '').slice(0, 10) === todayStr;
     }).length;
     var addedToday = allTasks.filter(function(t) {
-      return t[COL.T_ASSIGNEE] === staffName
+      return (t[COL.T_CREATOR] || t[COL.T_ASSIGNEE]) === staffName
           && (t[COL.T_START] || '').slice(0, 10) === todayStr;
     }).length;
     var inProgress = allTasks.filter(function(t) {
       return t[COL.T_ASSIGNEE] === staffName
           && (t[COL.T_STATUS] || '').toLowerCase().includes('đang thực hiện');
     }).length;
+
+    var onTimeRate = completedTasks.length > 0 ? Math.round((onTimeCount / completedTasks.length) * 100) : 0;
+    var managedProjectsList = allProjects.filter(function(p){ return p[COL.P_MANAGER] === staffName; });
+    var managedProjects = managedProjectsList.length;
+    var managedLargeProjects = managedProjectsList.filter(function(p) {
+      var pid = p[COL.P_ID];
+      var taskCount = allTasks.filter(function(t){ return t[COL.T_PID] === pid; }).length;
+      return taskCount >= 20;
+    }).length;
+
+    // New stats for 8-badge system
+    var assignedToOthersCount = allTasks.filter(function(t) {
+      return (t[COL.T_CREATOR] || '') === staffName
+          && (t[COL.T_ASSIGNEE] || '') !== staffName
+          && (t[COL.T_ASSIGNEE] || '') !== '';
+    }).length;
+    var totalDependentCount = allTasks.filter(function(t) {
+      return (t[COL.T_ASSIGNEE] || '') === staffName;
+    }).reduce(function(sum, t) {
+      return sum + Math.min(parseInt(t[COL.T_DEPENDENT_COUNT] || t.dependentCount || 0), 20);
+    }, 0);
+
+    // Comment XP (anti-cheat: daily cap + lifetime cap)
+    var commentCounts = allCommentCounts[staffName] || {};
+    var todayComments  = Math.min(commentCounts.today || 0, COMMENT_XP_CAP_PER_DAY);
+    var totalComments  = Math.min(commentCounts.total || 0, Math.round(COMMENT_XP_LIFETIME_CAP / COMMENT_XP));
+    var pastComments   = Math.max(0, totalComments - (commentCounts.today || 0));
+    var commentXP = (todayComments + pastComments) * COMMENT_XP;
+    xp += commentXP;
+
+    // Badge boosts (require intermediate stats for lookup — no circular ref)
+    var tempStats = {
+      completedAll: completedTasks.length, streak: streak,
+      assignerCount: assignerBonusTasks.length, onTimeRate: onTimeRate,
+    };
+    var boostMult = 1.0;
+    BADGE_BOOSTS.forEach(function(b) {
+      var badge = BADGE_DEFS.find(function(bd){ return bd.id === b.id; });
+      if (badge && getBadgeLevel(badge, tempStats) >= b.minLv) boostMult += b.bonus;
+    });
+    xp = Math.round(xp * Math.min(boostMult, MAX_BADGE_BOOST_MULT));
 
     return {
       xp: xp,
@@ -155,15 +361,99 @@
       addedToday: addedToday,
       inProgress: inProgress,
       completedAll: completedTasks.length,
+      createdCount: createdTasks.length,
+      assignerCount: assignerBonusTasks.length,
+      assignedToOthersCount: assignedToOthersCount,
+      totalDependentCount: totalDependentCount,
+      onTimeCount: onTimeCount,
+      onTimeRate: onTimeRate,
+      earlyCount: earlyCount,
+      lateCount: lateCount,
+      managedProjects: managedProjects,
+      managedLargeProjects: managedLargeProjects,
+      comboBonusXP: comboBonusXP,
+      bestComboMult: bestComboMult,
+      bestComboCount: bestComboCount,
+      todayComboMult: todayComboMult,
+      todayCompletedCount: todayCompletedCount,
+      commentCount: commentCounts.total || 0,
+      badgeBoostMult: Math.min(boostMult, MAX_BADGE_BOOST_MULT),
     };
   }
 
-  function showXPPopup(xp, isBonus) {
+  function showXPPopup(amount, options) {
+    if (typeof options === 'boolean') options = { isBonus: options };
+    options = options || {};
+    var xp = Math.round(Number(amount) || 0);
+    var comboMultiplier = Number(options.comboMultiplier || 1);
+    var icon = options.icon || (options.isBonus ? '⚡' : '🎉');
+
     var el = document.createElement('div');
-    el.className = 'xp-popup' + (isBonus ? ' bonus' : '');
-    el.textContent = (isBonus ? '⚡ Bonus ' : '🎉 ') + '+' + xp + ' XP';
+    el.className = 'xp-popup' + (options.isBonus ? ' bonus' : '') + (comboMultiplier > 1 ? ' combo' : '');
+    var xpText = (xp >= 0 ? '+' : '') + xp;
+    el.innerHTML =
+      '<span class="xp-popup-main">' + icon + ' ' + xpText + ' XP</span>' +
+      (comboMultiplier > 1 ? '<span class="xp-popup-combo">🔥 x' + comboMultiplier.toFixed(1).replace(/\.0$/, '') + '</span>' : '');
     document.body.appendChild(el);
     setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 2400);
+  }
+
+  function showLevelUpAnimation(levelInfo) {
+    if (!levelInfo) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'levelup-overlay';
+    overlay.innerHTML =
+      '<div class="levelup-card">' +
+        '<div class="levelup-title">LEVEL UP</div>' +
+        '<div class="levelup-icon">' + levelInfo.icon + '</div>' +
+        '<div class="levelup-level">Lv.' + levelInfo.level + '</div>' +
+        '<div class="levelup-name">' + levelInfo.name + '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    setTimeout(function() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }, 2200);
+  }
+
+  function checkLevelUp(user, previousXP, currentXP) {
+    var name = typeof user === 'string' ? user : (user && user.name) || '';
+    if (!name) return false;
+    var before = getLevelInfo(previousXP || 0);
+    var after = getLevelInfo(currentXP || 0);
+    if (after.level > before.level) {
+      showLevelUpAnimation(after);
+      return true;
+    }
+    return false;
+  }
+
+  function updateBadgeProgress(user) {
+    var name = typeof user === 'string' ? user : (user && user.name) || (currentUser ? currentUser.name || '' : '');
+    if (!name) return;
+    if (currentUser && (currentUser.name || '') === name) checkNewAchievements();
+    if (currentSection === 'achievements') renderAchievements();
+  }
+
+  function addXP(user, amount, options) {
+    var name = typeof user === 'string' ? user : (user && user.name) || '';
+    if (!name) return;
+    var baseStats = computeUserGameStats(name);
+    var previousXP = (RUNTIME_XP_STATE[name] && typeof RUNTIME_XP_STATE[name].xp === 'number')
+      ? RUNTIME_XP_STATE[name].xp
+      : baseStats.xp;
+    var delta = Math.round(Number(amount) || 0);
+    var currentXP = Math.max(0, previousXP + delta);
+    RUNTIME_XP_STATE[name] = { xp: currentXP, updatedAt: Date.now() };
+
+    showXPPopup(delta, options || {});
+    checkLevelUp(name, previousXP, currentXP);
+
+    if (currentUser && (currentUser.name || '') === name) {
+      setTimeout(function() {
+        updateUserGameUI();
+        updateBadgeProgress(name);
+      }, 350);
+    }
   }
 
   function showConfetti(x, y) {
@@ -203,6 +493,17 @@
         streakBadge.classList.add('hidden');
       }
     }
+
+    var comboBadge = document.getElementById('user-combo-badge');
+    if (comboBadge) {
+      if (stats.todayComboMult > 1) {
+        comboBadge.textContent = '🔥 x' + stats.todayComboMult.toFixed(1).replace(/\.0$/, '');
+        comboBadge.classList.remove('hidden');
+      } else {
+        comboBadge.classList.add('hidden');
+      }
+    }
+
     var bar = document.getElementById('user-xp-bar');
     if (bar) bar.style.width = Math.min(pct, 100) + '%';
 
@@ -211,6 +512,9 @@
 
     var xpNext = document.getElementById('user-xp-next');
     if (xpNext) xpNext.textContent = nextLvl ? ('→' + nextLvl.minXP + ' XP') : 'MAX';
+
+    // Refresh hero card if achievements tab is visible
+    if (currentSection === 'achievements') renderMyProfileHero();
   }
 
   // Daily quests definition & renderer
@@ -218,9 +522,9 @@
     var name = currentUser ? (currentUser.name || '') : '';
     var stats = computeUserGameStats(name);
     return [
-      { icon: '✅', label: 'Hoàn thành 1 nhiệm vụ hôm nay', reward: '+15 XP', done: stats.completedToday >= 1 },
-      { icon: '🔥', label: 'Hoàn thành 3 nhiệm vụ hôm nay', reward: '+50 XP', done: stats.completedToday >= 3 },
-      { icon: '🚀', label: 'Có nhiệm vụ đang thực hiện',    reward: '+10 XP', done: stats.inProgress >= 1   },
+      { icon: '✅', label: 'Hoàn thành 1 nhiệm vụ hôm nay', reward: '+20 XP', done: stats.completedToday >= 1 },
+      { icon: '🔥', label: 'Đạt combo 3 nhiệm vụ trong ngày', reward: 'Combo x1.2', done: stats.todayComboMult >= 1.2 },
+      { icon: '⏰', label: 'Giữ tỉ lệ đúng hạn từ 80%', reward: '+20% XP', done: stats.onTimeRate >= 80 },
     ];
   }
 
@@ -228,13 +532,11 @@
     return quests.map(function(q) {
       return '<div class="quest-card' + (q.done ? ' done' : '') + '">' +
         '<div class="quest-icon">' + q.icon + '</div>' +
-        '<div class="flex-1">' +
-          '<div class="text-sm font-medium text-gray-800">' + q.label + '</div>' +
-          '<div class="text-xs mt-0.5 ' + (q.done ? 'text-green-600 font-semibold' : 'text-gray-400') + '">' +
-            (q.done ? '✓ Hoàn thành · ' : '') + q.reward +
-          '</div>' +
+        '<div class="quest-content">' +
+          '<div class="quest-title">' + q.label + '</div>' +
+          '<div class="quest-reward ' + (q.done ? 'done' : '') + '">' + (q.done ? '✓ Hoàn thành · ' : '') + q.reward + '</div>' +
         '</div>' +
-        (q.done ? '<div class="text-green-500 text-xl">✓</div>' : '') +
+        (q.done ? '<div class="quest-check">✓</div>' : '') +
       '</div>';
     }).join('');
   }
@@ -365,6 +667,7 @@
     allProjects = dataResponse.projects || [];
     allTasks = dataResponse.tasks || [];
     allStaff = dataResponse.staff || [];
+    allCommentCounts = dataResponse.commentCounts || {};
 
     // Restore avatar from localStorage if exists
     var storedUser = null;
@@ -872,6 +1175,7 @@
     });
 
     document.addEventListener('click', handleQuickCompleteTask);
+    document.addEventListener('click', handleBadgeCardClick);
 
     document
       .getElementById('change-password-btn')
@@ -2437,6 +2741,11 @@
     const modal = document.getElementById(modalId);
     modal.classList.add('active');
 
+    // Load subtasks + comments when editing a task
+    if (type === 'task' && isEdit && data) {
+      setTimeout(() => loadSubtasksAndComments(data[COL.T_ID]), 250);
+    }
+
     // Setup form submission
     const form = modal.querySelector('form');
     if (form) {
@@ -2495,6 +2804,154 @@
         }
       }, 300);
     }
+  }
+
+  // ============================================================
+  // == SUBTASK + COMMENT — Frontend Helpers
+  // ============================================================
+
+  function loadSubtasksAndComments(taskId) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.success) return;
+        var list = document.getElementById('subtask-list');
+        if (!list) return;
+        var items = res.subtasks || [];
+        document.getElementById('subtask-count').textContent = items.length;
+        if (items.length === 0) {
+          list.innerHTML = '<div class="text-center text-gray-400 text-sm py-2">Chưa có subtask nào</div>';
+          return;
+        }
+        list.innerHTML = items.map(function(st) { return _renderSubtaskRow(st); }).join('');
+      })
+      .getSubtasks(taskId);
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.success) return;
+        var list = document.getElementById('comment-list');
+        if (!list) return;
+        var items = res.comments || [];
+        document.getElementById('comment-count').textContent = items.length;
+        if (items.length === 0) {
+          list.innerHTML = '<div class="text-center text-gray-400 text-sm py-2">Chưa có bình luận nào</div>';
+          return;
+        }
+        list.innerHTML = items.map(function(c) { return _renderCommentRow(c); }).join('');
+        list.scrollTop = list.scrollHeight;
+      })
+      .getComments('task', taskId);
+  }
+
+  function _renderSubtaskRow(st) {
+    var done = (st['Trạng thái'] || '').toLowerCase().includes('hoàn thành');
+    return `<div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background:${done?'#f0fdf4':'#f9fafb'};border:1px solid ${done?'#bbf7d0':'#e5e7eb'}">
+      <input type="checkbox" ${done?'checked':''} onchange="toggleSubtask('${st['Mã subtask']}', this.checked)" style="cursor:pointer">
+      <span style="flex:1;font-size:13px;${done?'text-decoration:line-through;color:#9ca3af':''}">${st['Tên subtask']}</span>
+      <span style="font-size:11px;color:#6b7280">${st['Người thực hiện']||''}</span>
+      <button onclick="deleteSubtaskItem('${st['Mã subtask']}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:12px;padding:0 2px" title="Xóa">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>`;
+  }
+
+  function _renderCommentRow(c) {
+    var isMine = c['Người bình luận'] === (currentUser && currentUser.name);
+    var time = c['Thời gian'] ? ('' + c['Thời gian']).slice(0, 16) : '';
+    return `<div class="flex gap-2">
+      <div style="width:32px;height:32px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:600;color:#6366f1">
+        ${(c['Người bình luận']||'?')[0]}
+      </div>
+      <div style="flex:1;background:#f9fafb;border-radius:8px;padding:8px 12px;border:1px solid #e5e7eb">
+        <div class="flex items-center justify-between mb-1">
+          <span style="font-size:12px;font-weight:600;color:#374151">${c['Người bình luận']||''}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:#9ca3af">${time}</span>
+            ${isMine ? `<button onclick="deleteCommentItem('${c['Mã comment']}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:11px;padding:0" title="Xóa"><i class="fas fa-trash"></i></button>` : ''}
+          </div>
+        </div>
+        <p style="font-size:13px;color:#374151;margin:0;white-space:pre-wrap">${c['Nội dung']||''}</p>
+      </div>
+    </div>`;
+  }
+
+  function openAddSubtaskForm(taskId) {
+    var form = document.getElementById('subtask-add-form');
+    if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function submitAddSubtask(taskId) {
+    var nameEl = document.getElementById('new-subtask-name');
+    var assigneeEl = document.getElementById('new-subtask-assignee');
+    if (!nameEl || !nameEl.value.trim()) { showToast('Vui lòng nhập tên subtask', 'error'); return; }
+    var data = { taskId: taskId, name: nameEl.value.trim(), assignee: assigneeEl ? assigneeEl.value : '' };
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          nameEl.value = '';
+          document.getElementById('subtask-add-form').style.display = 'none';
+          loadSubtasksAndComments(taskId);
+          showToast('Đã thêm subtask', 'success');
+        } else {
+          showToast((res && res.error) || 'Lỗi', 'error');
+        }
+      })
+      .addSubtask(data);
+  }
+
+  function toggleSubtask(subtaskId, checked) {
+    var status = checked ? 'Hoàn thành' : 'Đang thực hiện';
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res || !res.success) showToast('Lỗi cập nhật subtask', 'error');
+      })
+      .updateSubtask(subtaskId, { status: status });
+  }
+
+  function deleteSubtaskItem(subtaskId) {
+    if (!confirm('Xóa subtask này?')) return;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          var el = document.querySelector(`[onclick="deleteSubtaskItem('${subtaskId}')"]`);
+          if (el) el.closest('[style]').remove();
+          showToast('Đã xóa subtask', 'success');
+        }
+      })
+      .deleteSubtask(subtaskId);
+  }
+
+  function submitAddComment(taskId) {
+    var textEl = document.getElementById('new-comment-text');
+    if (!textEl || !textEl.value.trim()) { showToast('Vui lòng nhập nội dung', 'error'); return; }
+    var data = { type: 'task', objectId: taskId, content: textEl.value.trim() };
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          textEl.value = '';
+          loadSubtasksAndComments(taskId);
+        } else {
+          showToast((res && res.error) || 'Lỗi gửi bình luận', 'error');
+        }
+      })
+      .addComment(data);
+  }
+
+  function deleteCommentItem(commentId) {
+    if (!confirm('Xóa bình luận này?')) return;
+    // Reload the current task id from the modal
+    var taskIdInput = document.querySelector('#task-modal input[name="id"]');
+    var taskId = taskIdInput ? taskIdInput.value : null;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          if (taskId) loadSubtasksAndComments(taskId);
+          showToast('Đã xóa bình luận', 'success');
+        } else {
+          showToast((res && res.error) || 'Lỗi', 'error');
+        }
+      })
+      .deleteComment(commentId);
   }
 
   function createProjectModal(isEdit, data) {
@@ -2902,7 +3359,7 @@
                       </div>
                       <div class="form-group">
                           <label class="form-label required">Hạn chót</label>
-                          <input type="date" name="dueDate" class="form-input" required value="${isEdit ? formatDateForInput(data[COL.T_DUE]) : ''}" ${shouldDisableTopFields ? 'disabled' : ''}>
+                          <input type="date" name="dueDate" class="form-input" required value="${isEdit ? formatDateForInput(data[COL.T_DUE]) : ''}">
                       </div>
                   </div>
                   
@@ -2946,6 +3403,11 @@
                       <textarea name="notes" class="form-textarea">${isEdit ? data[COL.T_NOTES] || '' : ''}</textarea>
                   </div>
 
+                  <div class="form-group">
+                      <label class="form-label">Số người phụ thuộc <span class="text-xs font-normal" style="color:#6b7280">(ảnh hưởng XP — mặc định 0)</span></label>
+                      <input type="number" name="dependentCount" class="form-input" min="0" max="50" value="${isEdit ? parseInt(data[COL.T_DEPENDENT_COUNT] || 0) : 0}" placeholder="0">
+                  </div>
+
                   ${!isEdit ? `
                   <div class="form-group mt-2 p-4 rounded-xl" style="background:#eff6ff;border:1px solid #bfdbfe">
                       <label class="flex items-center gap-2 cursor-pointer font-semibold" style="color:#1d4ed8">
@@ -2970,6 +3432,11 @@
                                   <input type="number" name="recurringCount" class="form-input" min="1" max="52" value="3" placeholder="VD: 3">
                               </div>
                           </div>
+                          <div class="form-group mt-2">
+                              <label class="form-label" style="font-size:12px">Ngày kết thúc lặp <span style="color:#9ca3af;font-weight:400">(tuỳ chọn)</span></label>
+                              <input type="date" name="recurringStopDate" id="recurring-stop-date" class="form-input">
+                              <p class="text-xs mt-1" style="color:#6b7280">Các bản sao có ngày bắt đầu sau ngày này sẽ không được tạo.</p>
+                          </div>
                           <div id="recurring-weekday-row" style="display:none" class="form-group">
                               <label class="form-label" style="font-size:12px">Ngày trong tuần</label>
                               <select name="recurringWeekday" class="form-select">
@@ -2989,6 +3456,45 @@
                       <button type="submit" class="btn-primary">${submitText}</button>
                   </div>
               </form>
+
+              ${isEdit ? `
+              <div id="task-subtask-section" class="mt-6 pt-5" style="border-top:1px solid #e5e7eb">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="font-semibold text-gray-800" style="font-size:15px">📋 Subtasks <span id="subtask-count" class="ml-1 text-xs px-2 py-0.5 rounded-full" style="background:#eff6ff;color:#3b82f6">0</span></h4>
+                  <button type="button" onclick="openAddSubtaskForm('${data[COL.T_ID]}')" class="btn-secondary" style="font-size:12px;padding:4px 10px">
+                    <i class="fas fa-plus mr-1"></i>Thêm subtask
+                  </button>
+                </div>
+                <div id="subtask-add-form" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:10px">
+                  <div class="grid grid-cols-2 gap-2 mb-2">
+                    <input id="new-subtask-name" type="text" class="form-input" placeholder="Tên subtask" style="font-size:13px">
+                    <select id="new-subtask-assignee" class="form-select" style="font-size:13px">
+                      ${allStaff.map(s => `<option value="${s[COL.S_NAME]}">${s[COL.S_NAME]}</option>`).join('')}
+                    </select>
+                  </div>
+                  <div class="flex gap-2">
+                    <button type="button" onclick="submitAddSubtask('${data[COL.T_ID]}')" class="btn-primary" style="font-size:12px;padding:4px 12px">Thêm</button>
+                    <button type="button" onclick="document.getElementById('subtask-add-form').style.display='none'" class="btn-secondary" style="font-size:12px;padding:4px 10px">Hủy</button>
+                  </div>
+                </div>
+                <div id="subtask-list" class="space-y-2">
+                  <div class="text-center text-gray-400 text-sm py-2" id="subtask-loading">Đang tải...</div>
+                </div>
+              </div>
+
+              <div id="task-comment-section" class="mt-5 pt-5" style="border-top:1px solid #e5e7eb">
+                <h4 class="font-semibold text-gray-800 mb-3" style="font-size:15px">💬 Bình luận <span id="comment-count" class="ml-1 text-xs px-2 py-0.5 rounded-full" style="background:#f5f3ff;color:#8b5cf6">0</span></h4>
+                <div id="comment-list" class="space-y-3 mb-3 max-h-60 overflow-y-auto">
+                  <div class="text-center text-gray-400 text-sm py-2" id="comment-loading">Đang tải...</div>
+                </div>
+                <div class="flex gap-2">
+                  <textarea id="new-comment-text" class="form-textarea flex-1" rows="2" placeholder="Viết bình luận..." style="font-size:13px;resize:none"></textarea>
+                  <button type="button" onclick="submitAddComment('${data[COL.T_ID]}')" class="btn-primary" style="align-self:flex-end;padding:6px 14px">
+                    <i class="fas fa-paper-plane"></i>
+                  </button>
+                </div>
+              </div>
+              ` : ''}
           </div>
       </div>
   `;
@@ -3134,6 +3640,10 @@
           } else if (type === 'staff') {
             const index = allStaff.findIndex((s) => s[COL.S_ID] === tempId);
             if (index !== -1) allStaff[index][COL.S_ID] = response.staffId;
+          }
+          // +10 XP khi tạo nhiệm vụ mới
+          if (type === 'task') {
+            addXP(currentUser, CREATE_TASK_XP, { icon: '📝' });
           }
           showToast(
             `${type.charAt(0).toUpperCase() + type.slice(1)} đã được tạo thành công!`,
@@ -3636,16 +4146,14 @@
 
     // Hiển thị cả dự án và nhiệm vụ theo nhóm
     allProjects.forEach((project) => {
-      const projectStartDate = new Date(project[COL.P_START]);
-      const projectEndDate = new Date(project[COL.P_END]);
-      const hasValidDates = !isNaN(projectStartDate.getTime()) && !isNaN(projectEndDate.getTime());
+      const projectStartDate = safeDate(project[COL.P_START]);
+      const projectEndDate = safeDate(project[COL.P_END]);
+      const hasValidDates = projectStartDate && projectEndDate;
       const lastDayOfMonth = new Date(currentGanttDate.getFullYear(), currentGanttDate.getMonth() + 1, 0);
 
-      // Show project if: has no dates (always show), dates overlap current month, or spans entire month
+      // Show if: no valid dates OR project date range overlaps with current month
       const shouldShow = !hasValidDates ||
-        isDateInMonth(projectStartDate, currentGanttDate) ||
-        isDateInMonth(projectEndDate, currentGanttDate) ||
-        (projectStartDate < firstDay && projectEndDate > lastDayOfMonth);
+        (projectStartDate <= lastDayOfMonth && projectEndDate >= firstDay);
 
       if (shouldShow) {
         // === RENDER PROJECT ===
@@ -3728,19 +4236,13 @@
           <div class="gantt-project-tasks hidden" id="gantt-tasks-${projectId}">
             ${projectTasks
               .map((task) => {
-                const taskStartDate = new Date(task[COL.T_START]);
-                const taskEndDate = new Date(task[COL.T_DUE]);
+                const taskStartDate = safeDate(task[COL.T_START]);
+                const taskEndDate = safeDate(task[COL.T_DUE]);
 
-                const projectEndDate = new Date(project[COL.P_END]);
-                const lastDayOfMonth = new Date(
-                  currentGanttDate.getFullYear(),
-                  currentGanttDate.getMonth() + 1,
-                  0
-                );
+                const projectEndInner = safeDate(project[COL.P_END]);
 
                 // Hiển thị tất cả nhiệm vụ nếu dự án kết thúc trong hoặc sau tháng hiện tại
-                const projectEndValid = !isNaN(projectEndDate.getTime());
-                if (!projectEndValid || projectEndDate >= firstDay) {
+                if (!projectEndInner || projectEndInner >= firstDay) {
                   // Tính toán các giá trị Gantt cho task
                   const taskGanttBarStyle = calculateGanttBarStyle(
                     taskStartDate,
@@ -3819,17 +4321,9 @@
                     
                     <div class="gantt-item-timeline">
                         ${(() => {
-                          const hasValidTaskDates = !isNaN(taskStartDate.getTime()) && !isNaN(taskEndDate.getTime());
+                          const hasValidTaskDates = taskStartDate && taskEndDate;
                           const taskInMonth = !hasValidTaskDates ||
-                            isDateInMonth(taskStartDate, currentGanttDate) ||
-                            isDateInMonth(taskEndDate, currentGanttDate) ||
-                            (taskStartDate < firstDay &&
-                              taskEndDate >
-                                new Date(
-                                  currentGanttDate.getFullYear(),
-                                  currentGanttDate.getMonth() + 1,
-                                  0
-                                ));
+                            (taskStartDate <= lastDayOfMonth && taskEndDate >= firstDay);
                           return taskInMonth
                             ? `<div class="gantt-bar gantt-bar-task ${taskIsOverdue ? 'gantt-bar-overdue' : ''}" style="${taskGanttBarStyle}" data-tooltip="${task[COL.T_NAME]}: ${taskDescription}">
                             <div class="gantt-bar-label">${taskFormattedStartDate} - ${taskFormattedEndDate}: ${taskDescription}</div>
@@ -3946,6 +4440,32 @@
     return (
       date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear()
     );
+  }
+
+  // Parse date robustly: handles Date objects, ISO strings, and D/M/YYYY (Vietnamese Sheets API)
+  function safeDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    if (typeof val === 'string') {
+      if (val.match(/^\d{4}-\d{2}-\d{2}(T|$)/)) return new Date(val.includes('T') ? val : val + 'T00:00:00');
+      var m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    }
+    var d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Parse date robustly: handles Date objects, ISO strings, and D/M/YYYY (Vietnamese Sheets API)
+  function safeDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    if (typeof val === 'string') {
+      if (val.match(/^\d{4}-\d{2}-\d{2}(T|$)/)) return new Date(val.includes('T') ? val : val + 'T00:00:00');
+      var m = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    }
+    var d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
   }
 
   // Kiểm tra xem hai ngày có giống nhau không
@@ -5162,21 +5682,86 @@
                   showToast('Nhiệm vụ đã hoàn thành! 🎉', 'success');
 
                   // === GAMIFICATION: XP popup + confetti ===
-                  var earnedXP = getTaskXP(task);
-                  var due  = task[COL.T_DUE]  ? new Date(task[COL.T_DUE]) : null;
                   var now  = new Date();
-                  var isOnTime = due && now <= due;
-                  showXPPopup(earnedXP, false);
-                  if (isOnTime) {
-                    setTimeout(function() { showXPPopup(ONTIME_BONUS_XP, true); }, 700);
+                  var earnedXP = calculateXP(task, now);
+                  var due  = task[COL.T_DUE]  ? new Date(task[COL.T_DUE]) : null;
+                  var myName = currentUser ? (currentUser.name || '') : '';
+                  var completedToday = allTasks.filter(function(t) {
+                    return t[COL.T_ASSIGNEE] === myName
+                      && (t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành')
+                      && (t[COL.T_REPORT_DATE] || '').slice(0, 10) === now.toISOString().slice(0, 10);
+                  }).length;
+                  var comboMult = getComboMultiplier(completedToday);
+                  addXP(myName, earnedXP, { comboMultiplier: comboMult, icon: '🎯' });
+
+                  if (due && now > due) {
+                    setTimeout(function() { showXPPopup(-Math.round(getTaskXP(task) * 0.3), { isBonus: true, icon: '🐢' }); }, 650);
+                  }
+
+                  // +10 bonus nếu task được giao bởi người khác
+                  var taskCreator = task[COL.T_CREATOR] || '';
+                  if (taskCreator && taskCreator !== myName) {
+                    setTimeout(function() { addXP(myName, ASSIGN_COMPLETE_COMPLETER_XP, { isBonus: true, icon: '🤝' }); }, 1200);
                   }
                   // Confetti burst near the checkbox
                   var rect = checkbox.getBoundingClientRect();
                   showConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
 
                   // Update sidebar XP bar (after brief delay to let allTasks update optimistically)
-                  setTimeout(function() { updateUserGameUI(); }, 500);
+                  setTimeout(function() { updateUserGameUI(); updateBadgeProgress(myName); }, 500);
                   // ==========================================
+
+                  // Auto roll-forward next recurring task due date
+                  (function() {
+                    var tName = task[COL.T_NAME] || '';
+                    var m = tName.match(/\((\d+)\/(\d+)\)$/);
+                    if (m) {
+                      var cur   = parseInt(m[1]);
+                      var total = parseInt(m[2]);
+                      if (cur < total) {
+                        var base     = tName.replace(/\s*\(\d+\/\d+\)$/, '');
+                        var nextName = base + ' (' + (cur + 1) + '/' + total + ')';
+                        var nextTask = allTasks.find(function(t) {
+                          return t[COL.T_NAME] === nextName && t[COL.T_PID] === task[COL.T_PID];
+                        });
+                        if (nextTask) {
+                          var nd = nextTask[COL.T_DUE] ? safeDate(nextTask[COL.T_DUE]) : null;
+                          var today = new Date(); today.setHours(0,0,0,0);
+                          if (!nd || nd < today) {
+                            var tom = new Date(today.getTime() + 86400000);
+                            var newDue = tom.getFullYear() + '-' +
+                              String(tom.getMonth()+1).padStart(2,'0') + '-' +
+                              String(tom.getDate()).padStart(2,'0');
+                            google.script.run
+                              .withSuccessHandler(function(r) {
+                                if (r && r.success) {
+                                  showToast('Đã cập nhật hạn chót nhiệm vụ tiếp theo: ' + nextName, 'info');
+                                  setTimeout(refreshData, 800);
+                                }
+                              })
+                              .withFailureHandler(function() {})
+                              .updateTaskWithAuth(nextTask[COL.T_ID], {
+                                id: nextTask[COL.T_ID],
+                                projectId: nextTask[COL.T_PID],
+                                name: nextTask[COL.T_NAME],
+                                status: nextTask[COL.T_STATUS] || 'Chưa bắt đầu',
+                                completion: parseInt(nextTask[COL.T_COMPLETION] || 0),
+                                description: nextTask[COL.T_DESC] || '',
+                                assignee: nextTask[COL.T_ASSIGNEE] || '',
+                                priority: nextTask[COL.T_PRIORITY] || 'Trung bình',
+                                startDate: newDue,
+                                dueDate: newDue,
+                                reportDate: '',
+                                target: nextTask[COL.T_TARGET] || '',
+                                resultLinks: nextTask[COL.T_RESULT_LINKS] || '',
+                                output: nextTask[COL.T_OUTPUT] || '',
+                                notes: nextTask[COL.T_NOTES] || '',
+                              });
+                          }
+                        }
+                      }
+                    }
+                  })();
 
                   // render lại để đảm bảo đồng bộ
                   if (currentSection === 'tasks') {
@@ -5659,7 +6244,8 @@
 
           return `
                 <div class="stat-list-item rounded-xl border border-gray-100 hover:border-blue-200 bg-white p-3 mb-2 shadow-sm transition-all ${isOverdue ? 'border-l-4 border-l-red-500' : ''}" 
-                     onclick="if(canUserEditResource('task', '${tId}')) openEditModal('task', '${tId}')">
+                     onclick="if(canUserEditResource('task', '${tId}')) openEditModal('task', '${tId}'); else showToast('Bạn không có quyền chỉnh sửa nhiệm vụ này', 'error');"
+                     style="cursor:pointer">
                     
                     <div class="flex justify-between items-start mb-1">
                         <div class="flex-1 pr-2">
@@ -5980,7 +6566,21 @@
       '<div><label class="block text-sm font-medium text-gray-700 mb-1">Chức vụ</label><input type="text" id="profile-position" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.position || '') + '" /></div>' +
       '<div><label class="block text-sm font-medium text-gray-700 mb-1">Điện thoại</label><input type="text" id="profile-phone" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.phone || '') + '" /></div>' +
       '<div><label class="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label><input type="date" id="profile-birthday" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.birthday || '') + '" /></div>' +
-      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Phòng ban</label><input type="text" id="profile-department" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.department || '') + '" /></div>' +
+      '<div><label class="block text-sm font-medium text-gray-700 mb-1">Phòng ban</label>' +
+      '<input type="text" id="profile-department" list="dept-list" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="' + (currentUser.department || '') + '" placeholder="Chọn hoặc nhập phòng ban..." />' +
+      '<datalist id="dept-list">' +
+      '<option value="Ban Giám đốc" />' +
+      '<option value="Phòng Kỹ thuật" />' +
+      '<option value="Phòng Kinh doanh" />' +
+      '<option value="Phòng Marketing" />' +
+      '<option value="Phòng Nhân sự" />' +
+      '<option value="Phòng Kế toán" />' +
+      '<option value="Phòng Hành chính" />' +
+      '<option value="Phòng Vận hành" />' +
+      '<option value="Phòng Dự án" />' +
+      '<option value="Phòng Thiết kế" />' +
+      '</datalist>' +
+      '</div>' +
       '<div><label class="block text-sm font-medium text-gray-700 mb-1">Giới thiệu</label><textarea id="profile-bio" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 h-24 resize-none">' + (currentUser.bio || '') + '</textarea></div>' +
       '</div>' +
       '<div class="flex gap-3 mt-6">' +
@@ -6058,89 +6658,791 @@
     reader.readAsDataURL(file);
   }
 
+  // ── Avatar helpers ────────────────────────────────────────────
+  var AVATAR_GRADIENTS = [
+    ['#667eea','#764ba2'],['#f093fb','#f5576c'],['#4facfe','#00f2fe'],
+    ['#43e97b','#38f9d7'],['#fa709a','#fee140'],['#a18cd1','#fbc2eb'],
+    ['#ffecd2','#fcb69f'],['#ff9a9e','#fad0c4'],['#a1c4fd','#c2e9fb'],
+    ['#fd7b6c','#ff8177'],['#30cfd0','#330867'],['#f77062','#fe5196'],
+  ];
+  function _avatarGrad(name) {
+    var code = 0;
+    for (var i = 0; i < (name||'').length; i++) code += name.charCodeAt(i);
+    return AVATAR_GRADIENTS[code % AVATAR_GRADIENTS.length];
+  }
+  function _initials(name) {
+    var parts = (name||'').trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+    return (name||'?').charAt(0).toUpperCase();
+  }
+  function _avatarHTML(name, size, avatarUrl) {
+    var g = _avatarGrad(name);
+    var sz = size || 48;
+    var fontSize = Math.round(sz * 0.38);
+    if (avatarUrl) {
+      return '<img src="' + avatarUrl + '" style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;object-fit:cover;" alt="' + name + '">';
+    }
+    return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:50%;background:linear-gradient(135deg,' + g[0] + ',' + g[1] + ');display:flex;align-items:center;justify-content:center;color:white;font-size:' + fontSize + 'px;font-weight:800;flex-shrink:0;letter-spacing:-0.5px;">' + _initials(name) + '</div>';
+  }
+
   // ============================================================
-  // === ACHIEVEMENTS
+  // === ACHIEVEMENTS  (multi-level badge system)
   // ============================================================
+
+  // 5 visual tiers keyed by level number
+  var LEVEL_TIERS = {
+    0: { label:'Chưa đạt',  icon:'⬜', c1:'#94a3b8', c2:'#64748b', glow:'rgba(148,163,184,0)',  anim:false },
+    1: { label:'Khởi đầu',  icon:'⚪', c1:'#94a3b8', c2:'#64748b', glow:'rgba(148,163,184,0.3)', anim:false },
+    2: { label:'Đồng',      icon:'🟤', c1:'#f97316', c2:'#dc2626', glow:'rgba(249,115,22,0.4)',  anim:false },
+    3: { label:'Bạc',       icon:'🥈', c1:'#60a5fa', c2:'#3b82f6', glow:'rgba(96,165,250,0.45)', anim:false },
+    4: { label:'Vàng',      icon:'🥇', c1:'#fbbf24', c2:'#d97706', glow:'rgba(251,191,36,0.55)', anim:'pulse' },
+    5: { label:'Kim Cương', icon:'💎', c1:'#c084fc', c2:'#7c3aed', glow:'rgba(192,132,252,0.6)', anim:'sparkle' },
+  };
+
+  var BADGE_DEFS = [
+    // ── Tầng Thực Thi ──────────────────────────────────────────────────────────
+    { id:'hoan_thanh', group:'execution', icon:'✅', name:'Hoàn thành',
+      levels:[{lv:1,target:10,xp:20},{lv:2,target:30,xp:50},{lv:3,target:60,xp:100},{lv:4,target:100,xp:200},{lv:5,target:200,xp:400}],
+      getValue:function(s){ return s.completedAll; }, unit:'nhiệm vụ' },
+    { id:'lam_deu', group:'execution', icon:'🔥', name:'Làm đều',
+      levels:[{lv:1,target:3,xp:15},{lv:2,target:7,xp:35},{lv:3,target:14,xp:75},{lv:4,target:30,xp:160},{lv:5,target:60,xp:300}],
+      getValue:function(s){ return s.streak; }, unit:'ngày streak' },
+    // ── Tầng Điều Phối ─────────────────────────────────────────────────────────
+    { id:'giao_viec', group:'coordination', icon:'🤲', name:'Giao việc',
+      levels:[{lv:1,target:3,xp:20},{lv:2,target:10,xp:45},{lv:3,target:30,xp:90},{lv:4,target:60,xp:180},{lv:5,target:100,xp:340}],
+      getValue:function(s){ return s.assignedToOthersCount; }, unit:'task giao đi' },
+    { id:'ho_tro', group:'coordination', icon:'🤝', name:'Hỗ trợ',
+      levels:[{lv:1,target:3,xp:20},{lv:2,target:10,xp:50},{lv:3,target:25,xp:100},{lv:4,target:50,xp:200},{lv:5,target:100,xp:380}],
+      getValue:function(s){ return s.assignerCount; }, unit:'task giao hoàn thành' },
+    // ── Tầng Quản Lý ───────────────────────────────────────────────────────────
+    { id:'dung_han', group:'management', icon:'⏰', name:'Đúng hạn',
+      levels:[{lv:1,target:70,xp:20},{lv:2,target:80,xp:45},{lv:3,target:90,xp:90},{lv:4,target:95,xp:170},{lv:5,target:98,xp:320}],
+      getValue:function(s){ return s.onTimeRate; }, unit:'%' },
+    { id:'quan_ly', group:'management', icon:'📁', name:'Quản lý',
+      levels:[{lv:1,target:1,xp:30},{lv:2,target:2,xp:70},{lv:3,target:4,xp:140},{lv:4,target:8,xp:260},{lv:5,target:12,xp:480}],
+      getValue:function(s){ return s.managedProjects; }, unit:'dự án quản lý' },
+    // ── Tầng Chiến Lược ────────────────────────────────────────────────────────
+    { id:'anh_huong', group:'leadership', icon:'🚀', name:'Ảnh hưởng',
+      levels:[{lv:1,target:3,xp:25},{lv:2,target:10,xp:60},{lv:3,target:20,xp:120},{lv:4,target:40,xp:240},{lv:5,target:80,xp:450}],
+      getValue:function(s){ return s.totalDependentCount; }, unit:'dependency tổng' },
+    { id:'xuat_sac', group:'leadership', icon:'💎', name:'Xuất sắc',
+      levels:[{lv:1,target:1,xp:60},{lv:2,target:2,xp:130},{lv:3,target:3,xp:260},{lv:4,target:4,xp:450},{lv:5,target:5,xp:750}],
+      getValue:function(s){
+        var m = 0;
+        if (s.completedAll >= 30 && s.onTimeRate >= 75 && s.streak >= 5)  m = 1;
+        if (s.completedAll >= 70 && s.onTimeRate >= 80 && s.streak >= 10) m = 2;
+        if (s.completedAll >= 150 && s.onTimeRate >= 85 && s.streak >= 15) m = 3;
+        if (s.completedAll >= 250 && s.onTimeRate >= 90 && s.streak >= 25) m = 4;
+        if (s.completedAll >= 400 && s.onTimeRate >= 95 && s.streak >= 35) m = 5;
+        return m;
+      }, unit:'mốc' },
+  ];
+
+  var BADGE_GROUPS = [
+    { id:'execution',    label:'👨‍💻 Thực Thi',   icon:'💼', color:'#3b82f6', lightBg:'#eff6ff' },
+    { id:'coordination', label:'👥 Điều Phối',  icon:'🤝', color:'#8b5cf6', lightBg:'#f5f3ff' },
+    { id:'management',   label:'📊 Quản Lý',    icon:'📁', color:'#f59e0b', lightBg:'#fffbeb' },
+    { id:'leadership',   label:'🧠 Chiến Lược', icon:'🚀', color:'#ef4444', lightBg:'#fef2f2' },
+  ];
+
+  // Backward-compat aliases
+  var TIER_CFG = {
+    bronze:  { label:'Đồng',      c1:'#f97316', c2:'#dc2626', glow:'rgba(249,115,22,0.45)' },
+    silver:  { label:'Bạc',       c1:'#94a3b8', c2:'#475569', glow:'rgba(148,163,184,0.45)' },
+    gold:    { label:'Vàng',      c1:'#fbbf24', c2:'#d97706', glow:'rgba(251,191,36,0.5)'  },
+    diamond: { label:'Kim Cương', c1:'#22d3ee', c2:'#3b82f6', glow:'rgba(34,211,238,0.5)'  },
+  };
+
+  function getBadgeLevel(badge, stats) {
+    var val = badge.getValue(stats);
+    var cur = 0;
+    for (var i = 0; i < badge.levels.length; i++) {
+      if (val >= badge.levels[i].target) cur = badge.levels[i].lv;
+    }
+    return cur;
+  }
+
+  function getBadgeStorageKey(name) {
+    return 'badge_levels_' + (name || '');
+  }
+
+  function getStoredBadgeLevels(name) {
+    try {
+      var parsed = JSON.parse(localStorage.getItem(getBadgeStorageKey(name)) || '{}');
+      return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function getCurrentBadgeLevels(stats) {
+    var levels = {};
+    BADGE_DEFS.forEach(function(b) {
+      levels[b.id] = getBadgeLevel(b, stats);
+    });
+    return levels;
+  }
+
+  function getDisplayBadgeLevel(badge, stats, storedLevels) {
+    var current = getBadgeLevel(badge, stats);
+    var stored = Number((storedLevels && storedLevels[badge.id]) || 0);
+    return Math.max(current, stored);
+  }
+
+  function getBadgeProgressInfo(badge, stats, storedLevels) {
+    var val = Number(badge.getValue(stats) || 0);
+    var displayLv = getDisplayBadgeLevel(badge, stats, storedLevels);
+    var tier = LEVEL_TIERS[displayLv] || LEVEL_TIERS[0];
+    var currentCfg = badge.levels.find(function(l){ return l.lv === displayLv; }) || { target: 0, xp: 0 };
+    var nextCfg = badge.levels.find(function(l){ return l.lv === displayLv + 1; }) || null;
+    var prevTarget = displayLv > 0 ? currentCfg.target : 0;
+    var maxCfg = badge.levels[badge.levels.length - 1] || { target: 0 };
+    var progressValue = nextCfg ? nextCfg.target : maxCfg.target;
+    var progressPct = 100;
+    var remainingText = 'Đã đạt cấp tối đa';
+
+    if (nextCfg) {
+      var denom = Math.max(1, nextCfg.target - prevTarget);
+      progressPct = Math.round(((val - prevTarget) / denom) * 100);
+      if (progressPct < 0) progressPct = 0;
+      if (progressPct > 100) progressPct = 100;
+      var remaining = Math.max(0, nextCfg.target - val);
+      remainingText = remaining > 0
+        ? ('Còn ' + remaining + ' ' + badge.unit + ' → Lv tiếp theo')
+        : 'Sẵn sàng lên Lv tiếp theo';
+    }
+
+    return {
+      value: val,
+      displayLv: displayLv,
+      tier: tier,
+      nextCfg: nextCfg,
+      progressPct: progressPct,
+      progressValue: progressValue,
+      remainingText: remainingText,
+      currentCfg: currentCfg,
+      maxCfg: maxCfg,
+    };
+  }
+
+  function getTopBadgeHighlights(stats, storedLevels, limit) {
+    var ranked = BADGE_DEFS.map(function(b) {
+      var info = getBadgeProgressInfo(b, stats, storedLevels);
+      return {
+        badge: b,
+        info: info,
+        score: info.displayLv * 1000 + info.progressPct * 10 + Math.min(info.value, 999),
+      };
+    }).sort(function(a, b) {
+      return b.score - a.score;
+    });
+    return ranked.slice(0, limit || 3);
+  }
+
+  function checkNewAchievements() {
+    if (!currentUser) return;
+    var name = currentUser.name || '';
+    var stats = computeUserGameStats(name);
+    var storageKey = getBadgeStorageKey(name);
+    var stored = getStoredBadgeLevels(name);
+    var updated = false;
+    var topNewLevelBadge = null;
+    BADGE_DEFS.forEach(function(b) {
+      var cur = getBadgeLevel(b, stats);
+      var prev = stored[b.id] || 0;
+      if (cur > prev) {
+        stored[b.id] = cur;
+        updated = true;
+        if (!topNewLevelBadge || cur > topNewLevelBadge.newLevel) {
+          topNewLevelBadge = { badge: b, newLevel: cur };
+        }
+      }
+    });
+    if (updated) {
+      localStorage.setItem(storageKey, JSON.stringify(stored));
+      if (topNewLevelBadge) showAchievementUnlock(topNewLevelBadge.badge, topNewLevelBadge.newLevel);
+    }
+  }
+
+  function showAchievementUnlock(badge, newLevel) {
+    var t = LEVEL_TIERS[newLevel] || LEVEL_TIERS[1];
+    var overlay = document.createElement('div');
+    overlay.className = 'badge-unlock-overlay';
+    var lvlCfg = badge.levels.find(function(l){ return l.lv === newLevel; }) || {};
+    overlay.innerHTML =
+      '<div class="badge-unlock-card">' +
+        '<div class="badge-unlock-kicker" style="color:' + t.c1 + ';">🎊 CẤP ĐỘ MỚI</div>' +
+        '<div class="badge-unlock-icon" style="--c1:' + t.c1 + ';--c2:' + t.c2 + ';--glow:' + t.glow + ';">' + badge.icon + '</div>' +
+        '<div class="badge-unlock-name">' + badge.name + '</div>' +
+        '<div class="badge-unlock-level" style="color:' + t.c1 + ';">' + t.icon + ' Lv.' + newLevel + ' · ' + t.label + '</div>' +
+        (lvlCfg.xp ? '<div class="badge-unlock-xp" style="--c1:' + t.c1 + ';--c2:' + t.c2 + ';">+' + lvlCfg.xp + ' XP</div>' : '') +
+        '<button class="badge-unlock-btn" onclick="this.closest(\'.badge-unlock-overlay\').remove()">Đóng</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    for (var i = 0; i < 40; i++) {
+      (function() {
+        var piece = document.createElement('div');
+        piece.className = 'confetti-piece';
+        piece.style.left = (Math.random()*100) + 'vw';
+        piece.style.top = (Math.random()*60) + 'vh';
+        piece.style.background = ['#667eea','#764ba2','#fbbf24','#10b981','#ef4444','#3b82f6','#ec4899'][Math.floor(Math.random()*7)];
+        var s = (Math.random()*8+6) + 'px';
+        piece.style.width = piece.style.height = s;
+        piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+        piece.style.animationDelay = (Math.random()*0.8)+'s';
+        document.body.appendChild(piece);
+        setTimeout(function(){ if(piece.parentNode) piece.parentNode.removeChild(piece); }, 2200);
+      })();
+    }
+    overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  }
+
+  function handleBadgeCardClick(e) {
+    var card = e.target.closest('.gm-badge-card, .gm-top3-card, .gm-top3-focus');
+    if (!card) return;
+    e.preventDefault();
+    var badgeId = card.getAttribute('data-badge-id') || '';
+    if (badgeId) showBadgeDetailModal(badgeId);
+  }
+
+  function showBadgeDetailModal(badgeId) {
+    if (!currentUser) return;
+    var badge = BADGE_DEFS.find(function(b){ return b.id === badgeId; });
+    if (!badge) return;
+
+    var name = currentUser.name || '';
+    var stats = computeUserGameStats(name);
+    var storedLevels = getStoredBadgeLevels(name);
+    var info = getBadgeProgressInfo(badge, stats, storedLevels);
+    var t = info.tier;
+
+    var modal = document.createElement('div');
+    modal.className = 'badge-detail-overlay';
+    modal.innerHTML =
+      '<div class="badge-detail-modal">' +
+        '<button class="badge-detail-close" type="button">×</button>' +
+        '<div class="badge-detail-icon" style="--c1:' + t.c1 + ';--c2:' + t.c2 + ';--glow:' + t.glow + ';">' + badge.icon + '</div>' +
+        '<h4 class="badge-detail-title">' + badge.name + '</h4>' +
+        '<div class="badge-detail-level">' + t.icon + ' Lv.' + info.displayLv + ' · ' + t.label + '</div>' +
+        '<div class="badge-detail-progress">' +
+          '<div class="badge-detail-bar"><span style="width:' + info.progressPct + '%;background:linear-gradient(90deg,' + t.c1 + ',' + t.c2 + ');"></span></div>' +
+          '<div class="badge-detail-text">Tiến độ: ' + info.value + ' / ' + info.progressValue + '</div>' +
+          '<div class="badge-detail-next">' + info.remainingText + '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+
+    var closeBtn = modal.querySelector('.badge-detail-close');
+    if (closeBtn) closeBtn.addEventListener('click', function(){ modal.remove(); });
+    modal.addEventListener('click', function(evt) {
+      if (evt.target === modal) modal.remove();
+    });
+  }
+
+  // ── My Profile Hero Card ─────────────────────────────────────
+  function renderMyProfileHero() {
+    var hero = document.getElementById('my-profile-hero');
+    if (!hero) return;
+    if (!currentUser) { hero.innerHTML = ''; return; }
+    try {
+      var name = currentUser.name || '';
+      var myStats = computeUserGameStats(name);
+      var lvlInfo = getLevelInfo(myStats.xp);
+      var tier = lvlInfo.tierInfo;
+      var storedLevels = getStoredBadgeLevels(name);
+      var earnedBadges = BADGE_DEFS.filter(function(b){ return getDisplayBadgeLevel(b, myStats, storedLevels) > 0; });
+      var topBadges = getTopBadgeHighlights(myStats, storedLevels, 3);
+      var g = _avatarGrad(name);
+      var avatarUrl = currentUser._avatarDataUrl || currentUser.avatar || '';
+      var ranked = allStaff.map(function(s){
+        return { name: s[COL.S_NAME]||'', xp: computeUserGameStats(s[COL.S_NAME]||'').xp };
+      }).sort(function(a,b){ return b.xp - a.xp; });
+      var myRank = ranked.findIndex(function(r){ return r.name === name; }) + 1;
+
+      hero.innerHTML =
+        '<div class="gm-hero" style="--gm1:' + g[0] + ';--gm2:' + g[1] + ';">' +
+          '<div class="gm-hero-main">' +
+            '<div class="gm-hero-avatar-wrap">' +
+              '<div class="gm-hero-avatar">' +
+                (avatarUrl
+                  ? '<img src="' + avatarUrl + '" style="width:100%;height:100%;object-fit:cover;">'
+                  : '<div style="width:100%;height:100%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;color:white;">' + _initials(name) + '</div>'
+                ) +
+              '</div>' +
+              '<div class="gm-hero-avatar-level">' + lvlInfo.icon + '</div>' +
+            '</div>' +
+            '<div class="gm-hero-info">' +
+              '<div class="gm-hero-name">' + name + '</div>' +
+              '<div class="gm-hero-role">' +
+                '<span class="gm-tier-badge" style="background:' + tier.color + '20;color:' + tier.color + ';border:1px solid ' + tier.color + '40;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:6px;">' + tier.name.toUpperCase() + '</span>' +
+                (currentUser.role || '') + (myRank > 0 ? ' · Hạng #' + myRank : '') +
+              '</div>' +
+              '<div class="gm-hero-bar"><div class="gm-hero-bar-fill" style="width:' + lvlInfo.progress + '%;background:' + tier.color + ';"></div></div>' +
+              '<div class="gm-hero-sub">Lv.' + lvlInfo.level + ' ' + lvlInfo.name + ' · ' + myStats.xp + ' XP · ' +
+                (lvlInfo.nextLevel ? 'Còn ' + (lvlInfo.nextLevel.minXP - myStats.xp) + ' XP lên Lv.' + lvlInfo.nextLevel.level : '🏅 MAX') +
+              '</div>' +
+            '</div>' +
+            '<button onclick="showCertificateModal()" class="gm-cert-btn" title="Chứng chỉ thành tích">🎓</button>' +
+          '</div>' +
+          '<div class="gm-hero-stats">' +
+            _heroStat('✅', myStats.completedAll, 'Đã xong') +
+            _heroStat('🔥', myStats.streak, 'Streak') +
+            _heroStat('🎯', myStats.todayCompletedCount || 0, 'Hôm nay') +
+            _heroStat('🏅', earnedBadges.length, 'Huy hiệu') +
+          '</div>' +
+          '<div class="gm-top3-grid">' +
+            topBadges.map(function(item) {
+              var b = item.badge;
+              var info = item.info;
+              return '<div class="gm-top3-card" data-badge-id="' + b.id + '">' +
+                '<div class="gm-top3-icon" style="--c1:' + info.tier.c1 + ';--c2:' + info.tier.c2 + ';">' + b.icon + '</div>' +
+                '<div class="gm-top3-meta">' +
+                  '<div class="gm-top3-name">' + b.name + '</div>' +
+                  '<div class="gm-top3-lv">Lv.' + info.displayLv + '</div>' +
+                '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>' +
+        '</div>';
+    } catch (err) {
+      hero.innerHTML = '';
+    }
+  }
+  function _heroStat(icon, val, label) {
+    return '<div class="gm-hero-stat">' +
+      '<div class="gm-hero-stat-value">' + icon + ' ' + val + '</div>' +
+      '<div class="gm-hero-stat-label">' + label + '</div>' +
+    '</div>';
+  }
+
+  function _badgeChipRow(levels) {
+    return BADGE_DEFS.map(function(b){
+      var lv = levels[b.id] || 0;
+      var t = LEVEL_TIERS[lv] || LEVEL_TIERS[0];
+      return '<span class="gm-badge-chip" style="background:' + (lv > 0 ? 'linear-gradient(135deg,' + t.c1 + ',' + t.c2 + ')' : '#e2e8f0') + ';"></span>';
+    }).join('');
+  }
+
+  function _renderBadgeCard(badge, stats, storedLevels) {
+    var info = getBadgeProgressInfo(badge, stats, storedLevels);
+    var t = info.tier;
+    var levelText = info.displayLv > 0 ? ('Lv' + info.displayLv) : 'Lv0';
+    var tierLabel = info.displayLv > 0 ? (LEVEL_TIERS[info.displayLv].label + ' · ' + levelText) : 'Chưa đạt';
+    var tooltip = badge.name + ' · ' + tierLabel + '\n' + info.value + ' / ' + info.progressValue + ' ' + (badge.unit || '');
+    var anim = t.anim === 'sparkle' ? ' gm-sparkle' : (t.anim === 'pulse' ? ' gm-pulse' : '');
+    var bgTints = ['#fff','rgba(148,163,184,0.06)','rgba(249,115,22,0.07)','rgba(96,165,250,0.07)','rgba(251,191,36,0.09)','rgba(192,132,252,0.08)'];
+    var cardBg = bgTints[info.displayLv] || '#fff';
+
+    return '<article class="gm-badge-card' + (info.displayLv === 0 ? ' locked' : '') + anim +
+        '" data-badge-id="' + badge.id + '"' +
+        ' data-tooltip="' + tooltip + '"' +
+        ' style="--card-bg:' + cardBg + ';">' +
+      '<div class="gm-badge-icon" style="--c1:' + t.c1 + ';--c2:' + t.c2 + ';--glow:' + t.glow + ';">' + badge.icon + '</div>' +
+      '<h5 class="gm-badge-name">' + badge.name + '</h5>' +
+      '<div class="gm-badge-level">' + tierLabel + '</div>' +
+      '<div class="gm-badge-progress"><span style="width:' + info.progressPct + '%;background:linear-gradient(90deg,' + t.c1 + ',' + t.c2 + ');"></span></div>' +
+      '<div class="gm-badge-progress-text">' + info.value + ' / ' + info.progressValue + '</div>' +
+      '<div class="gm-badge-remaining">' + info.remainingText + '</div>' +
+    '</article>';
+  }
+
+  function _renderPodiumCard(entry, index, myName) {
+    var stats = entry.stats;
+    var lvl = stats.level;
+    var isMe = entry.name === myName;
+    var medals = ['🥇', '🥈', '🥉'];
+    var rankClasses = ['rank-1', 'rank-2', 'rank-3'];
+    var avatar = entry.avatarUrl
+      ? '<img src="' + entry.avatarUrl + '" style="width:100%;height:100%;object-fit:cover;" alt="">'
+      : _avatarHTML(entry.name, 50, '');
+    return '<article class="gm-lb-pod-card ' + (rankClasses[index] || '') + (isMe ? ' is-me' : '') + '">' +
+      '<span class="gm-lb-pod-medal">' + (medals[index] || '#' + (index + 1)) + '</span>' +
+      '<div class="gm-lb-pod-avatar">' + avatar + '</div>' +
+      '<h5 class="gm-lb-pod-name">' + entry.name + '</h5>' +
+      '<div class="gm-lb-pod-xp">' + stats.xp + ' XP</div>' +
+      '<div class="gm-lb-pod-level">Lv.' + lvl.level + ' ' + lvl.icon + '</div>' +
+      (isMe ? '<div class="gm-lb-pod-you">Bạn</div>' : '') +
+    '</article>';
+  }
+
+  function _renderListRow(entry, rankIndex, myName) {
+    var stats = entry.stats;
+    var lvl = stats.level;
+    var isMe = entry.name === myName;
+    var avatar = entry.avatarUrl
+      ? '<img src="' + entry.avatarUrl + '" style="width:100%;height:100%;object-fit:cover;" alt="">'
+      : _avatarHTML(entry.name, 32, '');
+    return '<div class="gm-lb-row' + (isMe ? ' is-me' : '') + '">' +
+      '<span class="gm-lb-row-rank">#' + (rankIndex + 1) + '</span>' +
+      '<div class="gm-lb-row-avatar">' + avatar + '</div>' +
+      '<div class="gm-lb-row-info">' +
+        '<span class="gm-lb-row-name">' + entry.name + '</span>' +
+        '<span class="gm-lb-row-level">Lv.' + lvl.level + ' ' + lvl.icon + '</span>' +
+      '</div>' +
+      '<span class="gm-lb-row-xp">' + stats.xp + ' XP</span>' +
+      (isMe ? '<span class="gm-lb-row-you">Bạn</span>' : '') +
+    '</div>';
+  }
+
+  function _renderLeaderboardCard(entry, index, myName) {
+    return index < 3 ? _renderPodiumCard(entry, index, myName) : _renderListRow(entry, index, myName);
+  }
+
   function renderAchievements() {
     var grid = document.getElementById('achievements-grid');
     if (!grid) return;
 
-    // ── Daily quests ──────────────────────────────────────────
-    renderDailyQuests();
+    try {
+      renderDailyQuests();
+      renderMyProfileHero();
 
-    // ── Specific achievement badges ───────────────────────────
-    var BADGE_DEFS = [
-      { key: 'newbie',       icon: '🌱', label: 'Mới bắt đầu',      desc: 'Hoàn thành 10 nhiệm vụ',   cond: function(s) { return s.completedAll >= 10;  } },
-      { key: 'active',       icon: '⚡', label: 'Năng động',         desc: 'Hoàn thành 25 nhiệm vụ',   cond: function(s) { return s.completedAll >= 25;  } },
-      { key: 'fire',         icon: '🔥', label: 'Nhiệt huyết',       desc: 'Streak ≥ 5 ngày',          cond: function(s) { return s.streak >= 5;         } },
-      { key: 'deadline',     icon: '⏰', label: 'Deadline Master',   desc: 'Hoàn thành 50 nhiệm vụ',   cond: function(s) { return s.completedAll >= 50;  } },
-      { key: 'diamond',      icon: '💎', label: 'Xuất sắc',          desc: 'Đạt Level 5+',             cond: function(s) { return s.level.level >= 5;    } },
-      { key: 'king',         icon: '👑', label: 'Huyền thoại',       desc: 'Đạt Level 7+',             cond: function(s) { return s.level.level >= 7;    } },
-    ];
+      var myName = currentUser ? (currentUser.name || '') : '';
+      var myStats = computeUserGameStats(myName);
+      var myStoredLevels = getStoredBadgeLevels(myName);
+      var myCurrentLevels = getCurrentBadgeLevels(myStats);
+      var mergedLevels = {};
+      BADGE_DEFS.forEach(function(b) {
+        mergedLevels[b.id] = Math.max(myCurrentLevels[b.id] || 0, myStoredLevels[b.id] || 0);
+      });
 
-    // ── Build leaderboard ─────────────────────────────────────
-    var ranked = allStaff.map(function(s) {
-      var name = s[COL.S_NAME] || '';
-      var stats = computeUserGameStats(name);
-      return { name: name, stats: stats, role: s[COL.S_ROLE] || '' };
-    }).sort(function(a, b) { return b.stats.xp - a.stats.xp; });
+      var earnedCount = BADGE_DEFS.filter(function(b){ return (mergedLevels[b.id] || 0) > 0; }).length;
+      var top3 = getTopBadgeHighlights(myStats, myStoredLevels, 3);
 
-    if (ranked.length === 0) {
-      grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400">Chưa có dữ liệu thành tích</div>';
-      return;
-    }
+      // Badge groups with unlock count + data-group for tab filtering
+      var groupsHTML = BADGE_GROUPS.map(function(group) {
+        var groupBadges = BADGE_DEFS.filter(function(b){ return b.group === group.id; });
+        var unlockedCount = groupBadges.filter(function(b){ return (mergedLevels[b.id] || 0) > 0; }).length;
+        return '<section class="gm-group" data-group="' + group.id + '">' +
+          '<div class="gm-group-head" style="--g:' + group.color + ';background:' + (group.lightBg || '#f8faff') + ';">' +
+            '<span class="gm-group-icon">' + group.icon + '</span>' +
+            '<h4 class="gm-group-title">' + group.label + '</h4>' +
+            '<span class="gm-group-count">' + unlockedCount + '/' + groupBadges.length + '</span>' +
+          '</div>' +
+          '<div class="gm-badge-grid">' +
+            groupBadges.map(function(b) { return _renderBadgeCard(b, myStats, myStoredLevels); }).join('') +
+          '</div>' +
+        '</section>';
+      }).join('');
 
-    var html = '';
-    for (var i = 0; i < ranked.length; i++) {
-      var r = ranked[i];
-      var stats = r.stats;
-      var lvl = stats.level;
-      var nextLvl = LEVELS.find(function(l) { return l.level === lvl.level + 1; });
-      var pct = nextLvl
-        ? Math.round(((stats.xp - lvl.minXP) / (nextLvl.minXP - lvl.minXP)) * 100)
-        : 100;
-
-      var cardClass = i === 0 ? 'achieve-card gold' : i === 1 ? 'achieve-card silver' : i === 2 ? 'achieve-card bronze' : 'achieve-card';
-      var rankIcon  = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '<span class="text-gray-500 font-bold">#' + (i + 1) + '</span>';
-
-      // Earned badges for this person
-      var earnedBadges = BADGE_DEFS.filter(function(b) { return b.cond(stats); });
-      var badgeHtml = earnedBadges.length
-        ? '<div class="flex flex-wrap gap-1 justify-center mt-2">' + earnedBadges.map(function(b) {
-            return '<span title="' + b.label + ': ' + b.desc + '" class="text-lg cursor-help">' + b.icon + '</span>';
-          }).join('') + '</div>'
-        : '<div class="text-xs text-gray-400 mt-2">Chưa có huy hiệu</div>';
-
-      html += '<div class="' + cardClass + '">' +
-        // Rank
-        '<div class="text-2xl font-bold mb-2">' + rankIcon + '</div>' +
-        // Avatar circle
-        '<div class="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-lg font-bold mb-2">' +
-          (r.name.charAt(0) || '?') +
-        '</div>' +
-        // Name + level badge
-        '<div class="font-semibold text-gray-900 text-center mb-0.5">' + r.name + '</div>' +
-        '<div class="flex items-center gap-1 mb-1">' +
-          '<span class="level-badge">Lv.' + lvl.level + ' ' + lvl.icon + '</span>' +
-          (stats.streak >= 1 ? '<span class="streak-badge">🔥' + stats.streak + '</span>' : '') +
-        '</div>' +
-        // Role
-        '<div class="text-xs text-gray-500 mb-2">' + r.role + '</div>' +
-        // Level progress
-        '<div class="w-full text-xs text-left text-gray-500 mb-0.5">' + lvl.name + ' → ' + (nextLvl ? nextLvl.name : 'MAX') + '</div>' +
-        '<div class="level-progress-wrap w-full mb-1"><div class="level-progress-fill" style="width:' + pct + '%"></div></div>' +
-        // XP display
-        '<div class="text-sm font-bold text-purple-600 mb-1">' + stats.xp + ' XP</div>' +
-        // Stats mini-row
-        '<div class="flex gap-3 text-xs text-gray-500 mb-1">' +
-          '<span title="Hoàn thành">✅ ' + stats.completedAll + '</span>' +
-          '<span title="Đang làm">🔵 ' + stats.inProgress + '</span>' +
-        '</div>' +
-        // Earned badges
-        badgeHtml +
+      var tierTabsHTML = '<div class="gm-tier-tabs" id="badge-tier-tabs">' +
+        '<button class="gm-tier-tab active" onclick="switchBadgeTierTab(this,\'all\')" data-tab="all">Tất cả</button>' +
+        BADGE_GROUPS.map(function(g) {
+          return '<button class="gm-tier-tab" onclick="switchBadgeTierTab(this,\'' + g.id + '\')" data-tab="' + g.id + '" style="--tc:' + g.color + '">' + g.icon + ' ' + g.label + '</button>';
+        }).join('') +
       '</div>';
+
+      var mySection =
+        '<section class="gm-panel" id="my-badges-panel" style="grid-column:1/-1;">' +
+          '<div class="gm-panel-head">' +
+            '<div>' +
+              '<h3 class="gm-panel-title">🏅 Huy hiệu của tôi</h3>' +
+              '<p class="gm-panel-sub">' + earnedCount + ' / ' + BADGE_DEFS.length + ' huy hiệu đã mở khóa</p>' +
+            '</div>' +
+            '<div class="gm-chip-row">' + _badgeChipRow(mergedLevels) + '</div>' +
+          '</div>' +
+          tierTabsHTML +
+          '<div class="gm-panel-body gm-road-body">' +
+            '<div class="gm-top3-list" style="grid-column:1/-1;">' +
+              top3.map(function(item) {
+                return '<div class="gm-top3-focus" data-badge-id="' + item.badge.id + '">' +
+                  '<div class="gm-top3-focus-name">' + item.badge.icon + ' ' + item.badge.name + '</div>' +
+                  '<div class="gm-top3-focus-meta">Lv' + item.info.displayLv + ' · ' + item.info.value + ' / ' + item.info.progressValue + '</div>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+            groupsHTML +
+          '</div>' +
+        '</section>';
+
+      // Ranked leaderboard data
+      var ranked = allStaff.map(function(s) {
+        var name = s[COL.S_NAME] || '';
+        var stats = computeUserGameStats(name);
+        var levels = getCurrentBadgeLevels(stats);
+        if (name === myName) {
+          BADGE_DEFS.forEach(function(b){ levels[b.id] = Math.max(levels[b.id] || 0, myStoredLevels[b.id] || 0); });
+        }
+        return {
+          name: name,
+          role: s[COL.S_ROLE] || '',
+          stats: stats,
+          avatarUrl: currentUser && currentUser.name === name ? (currentUser._avatarDataUrl || currentUser.avatar || '') : '',
+          sLevels: levels,
+        };
+      }).sort(function(a, b) { return b.stats.xp - a.stats.xp; });
+
+      var leaderboard =
+        '<section class="gm-panel" style="grid-column:1/-1;">' +
+          '<div class="gm-panel-head">' +
+            '<div>' +
+              '<h3 class="gm-panel-title">🏆 Bảng xếp hạng</h3>' +
+              '<p class="gm-panel-sub">Top thành viên theo XP</p>' +
+            '</div>' +
+            '<div class="gm-lb-tabs">' +
+              '<button class="gm-lb-tab active" onclick="switchLBTab(this,\'all\')" data-tab="all">Tất cả</button>' +
+              '<button class="gm-lb-tab" onclick="switchLBTab(this,\'week\')" data-tab="week">Tuần này</button>' +
+              '<button class="gm-lb-tab" onclick="switchLBTab(this,\'month\')" data-tab="month">Tháng này</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="gm-panel-body gm-road-body" id="lb-panel-body">' +
+            _renderLBContent(ranked, 'all', myName) +
+          '</div>' +
+        '</section>';
+
+      var xpGuide =
+        '<section class="gm-panel gm-xp-guide" style="grid-column:1/-1;">' +
+          '<div class="gm-panel-head"><h3 class="gm-panel-title">📊 Bảng điểm XP</h3></div>' +
+          '<div class="gm-xp-grid">' +
+            _xpRow('🟢', 'Dễ (easy)', '10 XP', '#059669') +
+            _xpRow('🔵', 'Trung bình', '20 XP', '#0284c7') +
+            _xpRow('🟠', 'Khó (hard)', '40 XP', '#ea580c') +
+            _xpRow('🔴', 'Rất khó', '80 XP', '#dc2626') +
+            _xpRow('⚡', 'Sớm hạn', '+50%', '#10b981') +
+            _xpRow('⏰', 'Đúng hạn', '+20%', '#0891b2') +
+            _xpRow('🐢', 'Trễ hạn', '-30%', '#ef4444') +
+            _xpRow('🔥', 'Combo 3/5/10', '×1.2 / ×1.5 / ×2', '#7c3aed') +
+            _xpRow('👥', 'Phụ thuộc +1', '+10% XP (tối đa ×3)', '#0f766e') +
+          '</div>' +
+        '</section>';
+
+      var storedLevels = getStoredBadgeLevels(name);
+      var careerRoadmap = _renderCareerRoadmap(myStats.xp, myStats, storedLevels);
+
+      grid.innerHTML =
+        careerRoadmap +
+        mySection +
+        leaderboard +
+        xpGuide;
+
+    } catch (err) {
+      grid.innerHTML = '<div class="gm-error">Không thể hiển thị thành tích lúc này. Vui lòng tải lại trang.</div>';
+      if (typeof console !== 'undefined' && console.error) console.error('renderAchievements failed', err);
     }
-    grid.innerHTML = html;
+  }
+
+  function _xpRow(icon, label, xp, color) {
+    return '<div class="gm-xp-row">' +
+      '<span class="gm-xp-icon">' + icon + '</span>' +
+      '<div class="gm-xp-meta">' +
+        '<div class="gm-xp-label">' + label + '</div>' +
+      '</div>' +
+      '<div class="gm-xp-value" style="color:' + color + ';">' + xp + '</div>' +
+    '</div>';
+  }
+
+  // ── Badge mini-card for roadmap ───────────────────────────────────────────
+  function _renderTierBadgeMini(badgeId, stats, storedLevels) {
+    var badge = BADGE_DEFS.find(function(b){ return b.id === badgeId; });
+    if (!badge) return '';
+    var lv = getDisplayBadgeLevel(badge, stats, storedLevels);
+    var maxLv = badge.levels.length;
+    var pct = lv < maxLv ? Math.round((badge.getValue(stats) / badge.levels[Math.max(0,lv)].target) * 100) : 100;
+    pct = Math.min(100, pct);
+    var isLocked = lv === 0 && pct < 10;
+    var isNear   = lv === 0 && pct >= 10 && pct < 100;
+    var cls = 'gm-road-badge-mini' + (isLocked ? ' locked' : '') + (isNear ? ' near' : '');
+    return '<div class="' + cls + '">' +
+      '<span class="gm-road-badge-mini-icon">' + badge.icon + '</span>' +
+      '<div class="gm-road-badge-mini-info">' +
+        '<div class="gm-road-badge-mini-name">' + badge.name + (lv > 0 ? ' <b>Lv.' + lv + '</b>' : '') + '</div>' +
+        '<div class="gm-road-badge-mini-bar"><div class="gm-road-badge-mini-fill" style="width:' + pct + '%"></div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Gate unlock requirement checklist ─────────────────────────────────────
+  function _renderUnlockReqs(gateLevel, stats, storedLevels) {
+    var req = LEVEL_REQUIREMENTS[gateLevel];
+    if (!req) return '';
+    var items = req.badges.map(function(r) {
+      var badge = BADGE_DEFS.find(function(b){ return b.id === r.id; });
+      if (!badge) return '';
+      var got = getDisplayBadgeLevel(badge, stats, storedLevels);
+      var ok = got >= r.lv;
+      return '<li class="gm-road-req-item' + (ok ? ' met' : '') + '">' +
+        (ok ? '✅' : '🔒') + ' ' + badge.name + ' Lv.' + r.lv +
+        (ok ? '' : ' <span class="gm-road-req-cur">(có Lv.' + got + ')</span>') +
+      '</li>';
+    }).join('');
+    return '<div class="gm-road-unlock-req">' +
+      '<div class="gm-road-req-title">' + (req.hard ? '🔒 Cần để lên Lv.' + gateLevel : '⚠️ Khuyến nghị Lv.' + gateLevel) + '</div>' +
+      '<ul class="gm-road-req-list">' + items + '</ul>' +
+    '</div>';
+  }
+
+  function _renderCareerRoadmap(currentXP, stats, storedLevels) {
+    stats = stats || {};
+    storedLevels = storedLevels || {};
+    var tierKeys = Object.keys(CAREER_TIERS);
+    var tiersHTML = tierKeys.map(function(key) {
+      var tier = CAREER_TIERS[key];
+      var levelsInTier = LEVELS.filter(function(l){ return l.tier === key; });
+      var minXP = levelsInTier[0] ? levelsInTier[0].minXP : 0;
+      var maxXP = levelsInTier[levelsInTier.length - 1] ? levelsInTier[levelsInTier.length - 1].minXP : 0;
+
+      var levelsHTML = levelsInTier.map(function(l) {
+        var nextLvObj = LEVELS.find(function(x){ return x.level === l.level + 1; });
+        var reached = currentXP >= l.minXP;
+        var isCurrent = reached && (!nextLvObj || currentXP < nextLvObj.minXP);
+        var gateOnThis = LEVEL_REQUIREMENTS[l.level + 1]; // gate for NEXT level = l.level+1
+        var gateIcon = '';
+        if (gateOnThis) {
+          var allMet = gateOnThis.badges.every(function(r) {
+            var badge = BADGE_DEFS.find(function(b){ return b.id === r.id; });
+            return badge && getDisplayBadgeLevel(badge, stats, storedLevels) >= r.lv;
+          });
+          gateIcon = gateOnThis.hard
+            ? (allMet ? ' <span title="Đã mở khoá">🔓</span>' : ' <span title="Cần badge để lên cấp">🔒</span>')
+            : (allMet ? '' : ' <span title="Nên đạt badge này">⚠️</span>');
+        }
+        return '<div class="gm-road-level' + (reached ? ' reached' : '') + (isCurrent ? ' current' : '') + '"' +
+          ' style="' + (reached ? '--lc:' + tier.color + ';' : '') + '">' +
+          '<div class="gm-road-dot">' + (isCurrent ? '📍' : (reached ? '✓' : l.icon)) + '</div>' +
+          '<div class="gm-road-lv-text">' +
+            '<div class="gm-road-lv-name"><b>Lv.' + l.level + '</b> ' + l.name + gateIcon + '</div>' +
+            '<div class="gm-road-lv-xp">' + l.minXP.toLocaleString() + ' XP</div>' +
+            '<div class="gm-road-lv-role">' + (l.role || '') + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      // Badge mini-cards for this tier
+      var badgeIds = TIER_BADGE_MAP[key] || [];
+      var badgesHTML = badgeIds.map(function(id) {
+        return _renderTierBadgeMini(id, stats, storedLevels);
+      }).join('');
+
+      // Unlock req block: show req for first level of tier (if any gate for that level)
+      var firstLv = levelsInTier[0];
+      var unlockReqHTML = firstLv ? _renderUnlockReqs(firstLv.level, stats, storedLevels) : '';
+
+      return '<div class="gm-road-tier" style="--tc:' + tier.color + ';--tbg:' + tier.bg + ';">' +
+        '<div class="gm-road-tier-head">' +
+          '<div class="gm-road-tier-name">' + tier.name + '</div>' +
+          '<div class="gm-road-tier-xp-range">' + minXP.toLocaleString() + ' – ' + maxXP.toLocaleString() + ' XP</div>' +
+        '</div>' +
+        '<div class="gm-road-levels">' + levelsHTML + '</div>' +
+        (badgesHTML ? '<div class="gm-road-tier-badges">' + badgesHTML + '</div>' : '') +
+        unlockReqHTML +
+      '</div>';
+    }).join('');
+
+    return '<section class="gm-panel gm-career-roadmap" style="margin-bottom:18px;grid-column:1/-1;">' +
+      '<div class="gm-panel-head"><h3 class="gm-panel-title">🗺️ Lộ trình thăng tiến</h3></div>' +
+      '<div class="gm-panel-body gm-road-body">' + tiersHTML + '</div>' +
+    '</section>';
+  }
+
+  function _computeRankedForPeriod(period) {
+    var now = new Date();
+    var periodStart = null;
+    if (period === 'week') {
+      var d = new Date(now); d.setHours(0,0,0,0);
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday
+      periodStart = d;
+    } else if (period === 'month') {
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    return allStaff.map(function(s) {
+      var name = s[COL.S_NAME] || '';
+      var relevantTasks = periodStart
+        ? allTasks.filter(function(t) {
+            if ((t[COL.T_ASSIGNEE] || '') !== name) return false;
+            if (!(t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành')) return false;
+            var rd = t[COL.T_REPORT_DATE];
+            if (!rd) return false;
+            return new Date(rd) >= periodStart;
+          })
+        : null;
+      var xpVal;
+      if (!periodStart) {
+        xpVal = computeUserGameStats(name).xp;
+      } else {
+        xpVal = relevantTasks.reduce(function(sum, t){ return sum + calculateXP(t); }, 0);
+      }
+      return {
+        name: name,
+        role: s[COL.S_ROLE] || '',
+        stats: { xp: xpVal, completedAll: relevantTasks ? relevantTasks.length : 0, streak: 0, todayCompletedCount: 0 },
+        avatarUrl: '',
+        sLevels: {},
+      };
+    }).sort(function(a, b){ return b.stats.xp - a.stats.xp; });
+  }
+
+  function _renderLBContent(ranked, period, myName) {
+    var list = period === 'all' ? ranked : _computeRankedForPeriod(period);
+    if (!list || list.length === 0) return '<div class="text-center text-gray-400 py-6">Không có dữ liệu</div>';
+    return '<div class="gm-lb-podium" style="grid-column:1/-1;">' +
+        list.slice(0, 3).map(function(r, idx){ return _renderPodiumCard(r, idx, myName); }).join('') +
+      '</div>' +
+      '<div class="gm-lb-list" style="grid-column:1/-1;">' +
+        list.slice(3, 12).map(function(r, idx){ return _renderListRow(r, idx + 3, myName); }).join('') +
+      '</div>';
+  }
+
+  var _lbRankedCache = null;
+  function switchLBTab(btn, period) {
+    document.querySelectorAll('.gm-lb-tab').forEach(function(t){ t.classList.remove('active'); });
+    btn.classList.add('active');
+    var body = document.getElementById('lb-panel-body');
+    if (!body) return;
+    var myName = currentUser ? (currentUser.name || '') : '';
+   
+
+  function switchBadgeTierTab(btn, tier) {
+    var tabBar = document.getElementById('badge-tier-tabs');
+    if (tabBar) tabBar.querySelectorAll('.gm-tier-tab').forEach(function(t){ t.classList.remove('active'); });
+    btn.classList.add('active');
+    var panel = document.getElementById('my-badges-panel');
+    if (!panel) return;
+    panel.querySelectorAll('.gm-group').forEach(function(el) {
+      var g = el.getAttribute('data-group');
+      el.style.display = (tier === 'all' || g === tier) ? '' : 'none';
+    });
+  } if (!_lbRankedCache) {
+      _lbRankedCache = allStaff.map(function(s) {
+        var name = s[COL.S_NAME] || '';
+        var stats = computeUserGameStats(name);
+        return { name: name, role: s[COL.S_ROLE]||'', stats: stats, avatarUrl: '', sLevels: {} };
+      }).sort(function(a,b){ return b.stats.xp - a.stats.xp; });
+    }
+    body.innerHTML = _renderLBContent(_lbRankedCache, period, myName);
+  }
+
+  function showCertificateModal() {
+    if (!currentUser) return;
+    var name = currentUser.name || '';
+    var myStats = computeUserGameStats(name);
+    var lvlInfo = getLevelInfo(myStats.xp);
+    var tier = lvlInfo.tierInfo;
+    var storedLevels = getStoredBadgeLevels(name);
+    var earnedBadges = BADGE_DEFS.filter(function(b){ return getDisplayBadgeLevel(b, myStats, storedLevels) > 0; });
+    var today = new Date().toLocaleDateString('vi-VN');
+    var certHTML = `
+      <div id="cert-modal" class="modal active">
+        <div class="modal-content" style="max-width:600px;text-align:center;">
+          <button type="button" class="close-modal" style="float:right;background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af" onclick="document.getElementById('cert-modal').remove()">✕</button>
+          <div style="background:linear-gradient(135deg,${tier.color}15,${tier.color}30);border:2px solid ${tier.color};border-radius:16px;padding:32px 28px;margin-top:8px">
+            <div style="font-size:48px;margin-bottom:8px">${lvlInfo.icon}</div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${tier.color};margin-bottom:8px">${tier.name} · Level ${lvlInfo.level}</div>
+            <h2 style="font-size:24px;font-weight:900;color:#1f2937;margin:0 0 4px">Chứng chỉ Thành tích</h2>
+            <p style="color:#6b7280;font-size:13px;margin-bottom:20px">Hệ thống Quản lý Dự án QLDA</p>
+            <div style="border-top:1px solid ${tier.color}30;border-bottom:1px solid ${tier.color}30;padding:16px 0;margin:0 0 20px">
+              <div style="font-size:28px;font-weight:900;color:#1f2937">${name}</div>
+              <div style="font-size:14px;color:#6b7280;margin-top:4px">đã đạt cấp bậc <strong style="color:${tier.color}">${lvlInfo.name}</strong> (Lv.${lvlInfo.level})</div>
+            </div>
+            <div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px">
+              <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:${tier.color}">${myStats.xp}</div><div style="font-size:11px;color:#9ca3af">Tổng XP</div></div>
+              <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:${tier.color}">${myStats.completedAll}</div><div style="font-size:11px;color:#9ca3af">Nhiệm vụ</div></div>
+              <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:${tier.color}">${earnedBadges.length}</div><div style="font-size:11px;color:#9ca3af">Huy hiệu</div></div>
+              <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:${tier.color}">${myStats.streak}</div><div style="font-size:11px;color:#9ca3af">Streak</div></div>
+            </div>
+            <div style="font-size:12px;color:#9ca3af">Ngày cấp: ${today}</div>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('modals-container').insertAdjacentHTML('beforeend', certHTML);
   }
 
 </script>
