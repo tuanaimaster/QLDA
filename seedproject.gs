@@ -181,6 +181,8 @@ function seedAutoBusinessSystem() {
     },
 
     // [PHỤ] Nhân Viên PDA (cũ, giữ nguyên)
+    {
+      name: '[GĐ2-P] Tạo thư viện template content Marketing',
       description: 'Xây dựng 50+ template content theo từng kênh (Facebook, TikTok, Email, Blog). Phân loại theo mục đích: nhận diện thương hiệu, chốt sale, CSKH.',
       assignee: assigneeName, status: 'Chưa bắt đầu', priority: 'Trung bình',
       startDate: '2026-05-01', dueDate: '2026-05-15', completion: 0,
