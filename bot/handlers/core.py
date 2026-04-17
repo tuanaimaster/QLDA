@@ -244,7 +244,7 @@ async def cmd_me(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     staff_id = linked.get("Mã NV", "")
     staff = db.get_staff_by_id(staff_id)
     role = staff.get("Phân quyền", "") if staff else ""
-    points = db.get_total_points(linked.get("Tên hiển thị", ""))
+    points = db.get_total_points(staff_id)
 
     text = (
         f"👤 <b>{linked.get('Tên hiển thị', '')}</b>\n"

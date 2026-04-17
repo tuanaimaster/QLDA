@@ -31,20 +31,21 @@ async def cmd_achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                                          parse_mode=ParseMode.HTML)
         return
 
-    staff_name = linked.get("Tên hiển thị", "")
-    achievements = db.get_achievements_for_staff(staff_name)
-    total = db.get_total_points(staff_name)
+    staff_id = linked.get("Mã NV", "")
+    staff_display = linked.get("Tên hiển thị", "")
+    achievements = db.get_achievements_for_staff(staff_id)
+    total = db.get_total_points(staff_id)
 
     if not achievements:
         await update.effective_message.reply_text(
-            f"🏆 <b>Thành tích của {staff_name}</b>\n\n"
+            f"🏆 <b>Thành tích của {staff_display}</b>\n\n"
             "Bạn chưa có thành tích nào.\n"
             "Hoàn thành nhiệm vụ để nhận thành tích! 💪",
             parse_mode=ParseMode.HTML,
         )
         return
 
-    lines = [f"🏆 <b>Thành tích của {staff_name}</b>\n⭐ Tổng điểm: <b>{total}</b>\n"]
+    lines = [f"🏆 <b>Thành tích của {staff_display}</b>\n⭐ Tổng điểm: <b>{total}</b>\n"]
     for ach in achievements[-10:]:  # latest 10
         ach_type = str(ach.get("Loại", ""))
         icon = BADGE_ICONS.get(ach_type, "🏅")

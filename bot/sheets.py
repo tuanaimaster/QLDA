@@ -279,7 +279,12 @@ class SheetsDB:
             if name:
                 totals[name] = totals.get(name, 0) + int(r.get(COL_ACH_POINTS, 0) or 0)
         leaderboard = sorted(totals.items(), key=lambda x: x[1], reverse=True)[:top_n]
-        return [{"name": name, "points": pts} for name, pts in leaderboard]
+        result = []
+        for sid, pts in leaderboard:
+            s = self.get_staff_by_id(sid)
+            display = s.get(COL_STAFF_NAME, sid) if s else sid
+            result.append({"name": display, "points": pts})
+        return result
 
     # ------------------------------------------------------------------
     # Report summary
