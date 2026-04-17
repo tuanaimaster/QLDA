@@ -34,6 +34,7 @@ const PROJECT_END_DATE_COLUMN_NAME = 'Ngày kết thúc';
 const PROJECT_STATUS_COLUMN_NAME = 'Trạng thái dự án';
 const PROJECT_TASKS_JSON_COLUMN_NAME = 'Nhiệm vụ JSON';
 const PROJECT_ACTIVITY_LOG_JSON_COLUMN_NAME = 'Nhật ký JSON';
+const PROJECT_PARTICIPANTS_COLUMN_NAME = 'Người tham gia';
 
 // === Cột sheet "Người dùng" ===
 const STAFF_ID_COLUMN_NAME = 'Mã NV';
@@ -356,6 +357,16 @@ function isManager(user) {
 }
 
 /**
+ * Check if user is team leader (Trưởng nhóm)
+ */
+function isTeamLeader(user) {
+  if (!user) return false;
+  return String(user.role || '')
+    .toLowerCase()
+    .includes('trưởng nhóm');
+}
+
+/**
  * Get filtered data based on user role
  */
 function getDataForUser() {
@@ -378,75 +389,57 @@ function getDataForUser() {
 
     // Filter data based on role
     if (!isAdmin(currentUser)) {
-      if (isManager(currentUser)) {
-        // === FILTER TASKS: Managers see tasks assigned to them and tasks in projects they manage ===
-        const managerProjectIds = projects
+      if (isManager(currentUser) || isTeamLeader(currentUser)) {
+        // === Quản lý / Trưởng nhóm: chỉ xem dự án từ mình xuống ===
+        const managedProjectIds = projects
           .filter((project) => project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name)
           .map((project) => project[PROJECT_ID_COLUMN_NAME]);
 
         tasks = tasks.filter((task) => {
-          // Tasks assigned to this manager
-          if (task[TASK_ASSIGNEE_COLUMN_NAME] === currentUser.name) {
-            return true;
-          }
-
-          // Tasks in projects managed by this manager
-          if (managerProjectIds.includes(task[TASK_PROJECT_ID_COLUMN_NAME])) {
-            return true;
-          }
-
+          if (task[TASK_ASSIGNEE_COLUMN_NAME] === currentUser.name) return true;
+          if (managedProjectIds.includes(task[TASK_PROJECT_ID_COLUMN_NAME])) return true;
           return false;
         });
 
-        // === FILTER PROJECTS: Managers see projects they manage or have tasks in ===
-        const managerTaskProjectIds = tasks
+        const userTaskProjectIds = tasks
           .map((task) => task[TASK_PROJECT_ID_COLUMN_NAME])
           .filter((id) => id);
 
         projects = projects.filter((project) => {
-          // Projects managed by this manager
-          if (project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name) {
-            return true;
-          }
-
-          // Projects where this manager has tasks
-          if (managerTaskProjectIds.includes(project[PROJECT_ID_COLUMN_NAME])) {
-            return true;
-          }
-
+          if (project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name) return true;
+          // Kiểm tra người tham gia dự án
+          const participants = String(project[PROJECT_PARTICIPANTS_COLUMN_NAME] || '')
+            .split(',').map((s) => s.trim()).filter(Boolean);
+          if (participants.includes(currentUser.name)) return true;
+          if (userTaskProjectIds.includes(project[PROJECT_ID_COLUMN_NAME])) return true;
           return false;
         });
       } else {
-        // === FILTER TASKS: Regular users see tasks assigned to them OR in projects they manage ===
+        // === Nhân viên: chỉ xem dự án mình đang tham gia ===
         tasks = tasks.filter((task) => {
           const assignee = String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim();
-          if (assignee === currentUser.name) {
-            return true;
-          }
-
-          // Check if user is project manager for this task
+          if (assignee === currentUser.name) return true;
           const projectId = task[TASK_PROJECT_ID_COLUMN_NAME];
           const project = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === projectId);
           return project && project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name;
         });
 
-        // === FILTER PROJECTS: Show projects that have tasks assigned to this user OR user is manager ===
         const userTaskProjectIds = new Set(
           tasks.map((task) => task[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id)
         );
-
-        // Include projects where user is manager
         const userManagedProjects = projects.filter(
           (project) => project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name
         );
-
         userManagedProjects.forEach((project) => {
           userTaskProjectIds.add(project[PROJECT_ID_COLUMN_NAME]);
         });
 
         projects = projects.filter((project) => {
-          const projectId = project[PROJECT_ID_COLUMN_NAME];
-          return userTaskProjectIds.has(projectId);
+          if (userTaskProjectIds.has(project[PROJECT_ID_COLUMN_NAME])) return true;
+          // Kiểm tra danh sách người tham gia
+          const participants = String(project[PROJECT_PARTICIPANTS_COLUMN_NAME] || '')
+            .split(',').map((s) => s.trim()).filter(Boolean);
+          return participants.includes(currentUser.name);
         });
       }
 
@@ -986,6 +979,7 @@ function addProject(projectData) {
       PROJECT_NAME_COLUMN_NAME,
       PROJECT_DESC_COLUMN_NAME,
       PROJECT_MANAGER_COLUMN_NAME,
+      PROJECT_PARTICIPANTS_COLUMN_NAME,
       PROJECT_START_DATE_COLUMN_NAME,
       PROJECT_END_DATE_COLUMN_NAME,
       PROJECT_STATUS_COLUMN_NAME,
@@ -994,6 +988,13 @@ function addProject(projectData) {
     ]);
 
     const headers = getHeaders(projectSheet);
+
+    // Đảm bảo cột Người tham gia tồn tại (cho sheet cũ chưa có cột này)
+    if (!headers.includes(PROJECT_PARTICIPANTS_COLUMN_NAME)) {
+      const newColIndex = headers.length + 1;
+      projectSheet.getRange(1, newColIndex).setValue(PROJECT_PARTICIPANTS_COLUMN_NAME);
+      headers.push(PROJECT_PARTICIPANTS_COLUMN_NAME);
+    }
 
     // Validate dữ liệu đầu vào
     if (!projectData || !projectData.name || String(projectData.name).trim() === '') {
@@ -1018,6 +1019,10 @@ function addProject(projectData) {
     newRow[headers.indexOf(PROJECT_START_DATE_COLUMN_NAME)] = parseDate(projectData.startDate);
     newRow[headers.indexOf(PROJECT_END_DATE_COLUMN_NAME)] = parseDate(projectData.endDate);
     newRow[headers.indexOf(PROJECT_STATUS_COLUMN_NAME)] = projectData.status || 'Chưa bắt đầu';
+    const participantsIdx = headers.indexOf(PROJECT_PARTICIPANTS_COLUMN_NAME);
+    if (participantsIdx !== -1) {
+      newRow[participantsIdx] = projectData.participants ? String(projectData.participants).trim() : '';
+    }
 
     projectSheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -1072,6 +1077,7 @@ function updateProject(projectId, projectData) {
       [headers.indexOf(PROJECT_START_DATE_COLUMN_NAME), parseDate(projectData.startDate)],
       [headers.indexOf(PROJECT_END_DATE_COLUMN_NAME), parseDate(projectData.endDate)],
       [headers.indexOf(PROJECT_STATUS_COLUMN_NAME), projectData.status],
+      [headers.indexOf(PROJECT_PARTICIPANTS_COLUMN_NAME), projectData.participants !== undefined ? String(projectData.participants || '').trim() : undefined],
     ];
 
     updates.forEach(([index, newValue]) => {

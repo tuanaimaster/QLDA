@@ -27,6 +27,7 @@
     P_NAME: 'Tên dự án',
     P_DESC: 'Mô tả dự án',
     P_MANAGER: 'Quản lý dự án',
+    P_PARTICIPANTS: 'Người tham gia',
     P_START: 'Ngày bắt đầu',
     P_END: 'Ngày kết thúc',
     P_STATUS: 'Trạng thái dự án',
@@ -745,6 +746,7 @@
   function updateUIForUser(user) {
     const isAdminUser = isAdmin();
     const isManagerUser = user.role && user.role.toLowerCase().includes('quản lý');
+    const isTeamLeaderUser = user.role && user.role.toLowerCase().includes('trưởng nhóm');
 
     // Update user info in sidebar
     document.getElementById('user-info').classList.remove('hidden');
@@ -791,8 +793,8 @@
       if (projectsNav) projectsNav.style.display = 'flex';
       if (staffNav) staffNav.style.display = 'flex';
       showAdminButtons();
-    } else if (isManagerUser) {
-      // Show projects nav for managers, hide staff nav
+    } else if (isManagerUser || isTeamLeaderUser) {
+      // Show projects nav for managers and team leaders, hide staff nav
       if (projectsNav) projectsNav.style.display = 'flex';
       if (staffNav) staffNav.style.display = 'none';
       hideAdminButtons();
@@ -839,7 +841,7 @@
     projectButtons.forEach((buttonId) => {
       const button = document.getElementById(buttonId);
       if (button) {
-        if (isAdmin() || isManager()) {
+        if (isAdmin() || isManager() || isTeamLeader()) {
           button.style.display = '';
         } else {
           button.style.display = 'none';
@@ -1148,6 +1150,10 @@
     return currentUser && currentUser.role && currentUser.role.toLowerCase().includes('quản lý');
   }
 
+  function isTeamLeader() {
+    return currentUser && currentUser.role && currentUser.role.toLowerCase().includes('trưởng nhóm');
+  }
+
   function hideLoginError() {
     const errorDiv = document.getElementById('login-error');
     if (errorDiv) {
@@ -1201,7 +1207,7 @@
     // Quick add buttons - only work if user is authenticated and has permission
     document.getElementById('quick-add-project')?.addEventListener('click', () => {
       // Thay đổi điều kiện từ isAdmin() thành isAdmin() || isManager()
-      if (isAuthenticated && (isAdmin() || isManager())) openModal('project');
+      if (isAuthenticated && (isAdmin() || isManager() || isTeamLeader())) openModal('project');
     });
     document.getElementById('quick-add-task')?.addEventListener('click', () => {
       if (isAuthenticated && isAdmin()) openModal('task');
@@ -1213,11 +1219,11 @@
     // Add buttons
     document.getElementById('add-project-btn')?.addEventListener('click', () => {
       // Thay đổi điều kiện từ isAdmin() thành isAdmin() || isManager()
-      if (isAuthenticated && (isAdmin() || isManager())) openModal('project');
+      if (isAuthenticated && (isAdmin() || isManager() || isTeamLeader())) openModal('project');
     });
     document.getElementById('add-project-standalone')?.addEventListener('click', () => {
       // Thay đổi điều kiện từ isAdmin() thành isAdmin() || isManager()
-      if (isAuthenticated && (isAdmin() || isManager())) openModal('project');
+      if (isAuthenticated && (isAdmin() || isManager() || isTeamLeader())) openModal('project');
     });
     document.getElementById('add-task-btn')?.addEventListener('click', () => {
       if (isAuthenticated && canUserCreateTask()) openModal('task');
@@ -1657,14 +1663,14 @@
   function canUserEditResource(type, id) {
     if (isAdmin()) return true;
 
-    if (isManager()) {
-      // Managers can edit projects and any tasks
+    if (isManager() || isTeamLeader()) {
+      // Managers and team leaders can edit projects and any tasks
       if (type === 'project') {
         return true;
       }
 
       if (type === 'task') {
-        // Manager có thể sửa tất cả các task
+        // Quản lý / Trưởng nhóm có thể sửa tất cả các task
         return true;
       }
     }
@@ -1701,14 +1707,14 @@
   function canUserDeleteResource(type, id) {
     if (isAdmin()) return true;
 
-    if (isManager()) {
-      // Managers can delete projects and any tasks
+    if (isManager() || isTeamLeader()) {
+      // Managers and team leaders can delete projects and any tasks
       if (type === 'project') {
         return true;
       }
 
       if (type === 'task') {
-        // Manager có thể xóa tất cả các task
+        // Quản lý / Trưởng nhóm có thể xóa tất cả các task
         return true;
       }
     }
@@ -3038,6 +3044,17 @@
           startDateInput.setAttribute('max', this.value);
         });
       }
+
+      // Sync participant checkboxes → hidden input
+      function _syncParticipants() {
+        var checked = Array.from(document.querySelectorAll('#project-modal .project-participant-cb:checked'))
+          .map(function(cb) { return cb.value; });
+        var hidden = document.getElementById('project-participants-hidden');
+        if (hidden) hidden.value = checked.join(',');
+      }
+      document.querySelectorAll('#project-modal .project-participant-cb').forEach(function(cb) {
+        cb.addEventListener('change', _syncParticipants);
+      });
     }, 100);
 
     return `
@@ -3055,18 +3072,18 @@
                   
                   <div class="form-group">
                       <label class="form-label required">Tên dự án</label>
-                      <input type="text" name="name" class="form-input" required value="${isEdit ? data[COL.P_NAME] || '' : ''}" ${isEdit && !isAdmin() && !isManager() ? 'disabled' : ''}>
+                      <input type="text" name="name" class="form-input" required value="${isEdit ? data[COL.P_NAME] || '' : ''}" ${isEdit && !isAdmin() && !isManager() && !isTeamLeader() ? 'disabled' : ''}>
 
                   </div>
                   
                   <div class="form-group">
                       <label class="form-label">Mô tả</label>
-                      <textarea name="description" class="form-textarea" ${isEdit && !isAdmin() && !isManager() ? 'disabled' : ''}>${isEdit ? data[COL.P_DESC] || '' : ''}</textarea>
+                      <textarea name="description" class="form-textarea" ${isEdit && !isAdmin() && !isManager() && !isTeamLeader() ? 'disabled' : ''}>${isEdit ? data[COL.P_DESC] || '' : ''}</textarea>
                   </div>
                   
                   <div class="form-group">
                       <label class="form-label">Quản lý dự án</label>
-                      <select name="manager" class="form-select" ${isEdit && !isAdmin() && !isManager() ? 'disabled' : ''} ${isManager() && !isAdmin() ? 'disabled' : ''}>
+                      <select name="manager" class="form-select" ${isEdit && !isAdmin() && !isManager() && !isTeamLeader() ? 'disabled' : ''} ${(isManager() || isTeamLeader()) && !isAdmin() ? 'disabled' : ''}>
                           <option value="">-- Chọn quản lý --</option>
                           ${eligibleManagers
                             .map((staff) => {
@@ -3090,11 +3107,11 @@
                   <div class="grid grid-cols-3 gap-4">
                       <div class="form-group">
                           <label class="form-label required">Ngày bắt đầu</label>
-                          <input type="date" name="startDate" class="form-input" required value="${isEdit ? formatDateForInput(data[COL.P_START]) : ''}" ${isEdit && !isAdmin() && !isManager() ? 'disabled' : ''}>
+                          <input type="date" name="startDate" class="form-input" required value="${isEdit ? formatDateForInput(data[COL.P_START]) : ''}" ${isEdit && !isAdmin() && !isManager() && !isTeamLeader() ? 'disabled' : ''}>
                       </div>
                       <div class="form-group">
                           <label class="form-label required">Ngày kết thúc</label>
-                          <input type="date" name="endDate" class="form-input" required value="${isEdit ? formatDateForInput(data[COL.P_END]) : ''}" ${isEdit && !isAdmin() && !isManager() ? 'disabled' : ''}>
+                          <input type="date" name="endDate" class="form-input" required value="${isEdit ? formatDateForInput(data[COL.P_END]) : ''}" ${isEdit && !isAdmin() && !isManager() && !isTeamLeader() ? 'disabled' : ''}>
                       </div>
                       <div class="form-group">
                           <label class="form-label">Trạng thái</label>
@@ -3106,7 +3123,27 @@
                               <option value="Hủy bỏ" ${isEdit && data[COL.P_STATUS] === 'Hủy bỏ' ? 'selected' : ''}>Hủy bỏ</option>
                           </select>
                       </div>
-                  </div>              
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Người tham gia dự án</label>
+                    <input type="hidden" name="participants" id="project-participants-hidden"
+                      value="${isEdit ? (data[COL.P_PARTICIPANTS] || '') : ''}">
+                    <div class="border border-gray-200 rounded-xl p-2 max-h-44 overflow-y-auto space-y-0.5 bg-white">
+                      ${allStaff.map(function(s) {
+                        var pList = isEdit
+                          ? String(data[COL.P_PARTICIPANTS] || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean)
+                          : [];
+                        var chk = pList.indexOf(s[COL.S_NAME]) !== -1 ? 'checked' : '';
+                        return '<label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded-lg cursor-pointer text-sm">' +
+                          '<input type="checkbox" class="project-participant-cb" value="' + s[COL.S_NAME] + '" ' + chk + '>' +
+                          '<span class="flex-1">' + s[COL.S_NAME] + '</span>' +
+                          '<span class="text-xs text-gray-400">' + (s[COL.S_POS] || '') + '</span>' +
+                        '</label>';
+                      }).join('')}
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1">Những người có thể xem và tham gia dự án này</p>
+                  </div>
                   
                   <div class="flex justify-end space-x-3 mt-6">
                       <button type="button" class="btn-secondary close-modal">Hủy</button>
@@ -3306,7 +3343,7 @@
                     <label class="form-label required">Thuộc dự án</label>
                     <select name="projectId" class="form-select" required ${shouldDisableTopFields ? 'disabled' : ''}>
                       <option value="">-- Chọn dự án --</option>
-                      ${(isAdmin() || isManager() ? allProjects : getUserAllowedProjects())
+                      ${(isAdmin() || isManager() || isTeamLeader() ? allProjects : getUserAllowedProjects())
                         .map((project) => {
                           const selected =
                             isEdit && data[COL.T_PID] === project[COL.P_ID] ? 'selected' : '';
@@ -3563,6 +3600,7 @@
                       <label class="form-label">Phân quyền</label>
                       <select name="role" class="form-select">
                           <option value="Nhân viên" ${isEdit && data[COL.S_ROLE] === 'Nhân viên' ? 'selected' : 'selected'}>Nhân viên</option>
+                          <option value="Trưởng nhóm" ${isEdit && data[COL.S_ROLE] === 'Trưởng nhóm' ? 'selected' : ''}>Trưởng nhóm</option>
                           <option value="Quản lý" ${isEdit && data[COL.S_ROLE] === 'Quản lý' ? 'selected' : ''}>Quản lý</option>
                           <option value="Admin" ${isEdit && data[COL.S_ROLE] === 'Admin' ? 'selected' : ''}>Admin</option>
                       </select>
@@ -3987,38 +4025,25 @@
       return allProjects;
     }
 
-    if (isManager()) {
-      // Quản lý chỉ thấy dự án họ quản lý hoặc có nhiệm vụ
-      const managerProjects = allProjects.filter(
-        (project) => project[COL.P_MANAGER] === currentUser.name
-      );
+    // Mọi role khác: chỉ xem dự án mình quản lý, tham gia, hoặc có nhiệm vụ
+    return allProjects.filter(function(project) {
+      // Dự án do mình quản lý
+      if (project[COL.P_MANAGER] === currentUser.name) return true;
 
-      // Thêm các dự án mà quản lý có nhiệm vụ
-      const managerTasks = allTasks.filter((task) => task[COL.T_ASSIGNEE] === currentUser.name);
-      const taskProjectIds = [...new Set(managerTasks.map((task) => task[COL.T_PID]))];
+      // Dự án mình được liệt kê là người tham gia
+      var participants = String(project[COL.P_PARTICIPANTS] || '')
+        .split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      if (participants.indexOf(currentUser.name) !== -1) return true;
 
-      const projectIds = new Set([...managerProjects.map((p) => p[COL.P_ID]), ...taskProjectIds]);
-
-      return allProjects.filter((project) => projectIds.has(project[COL.P_ID]));
-    }
-
-    // Người dùng thường - dự án họ có nhiệm vụ hoặc quản lý
-    const userTasks = allTasks.filter((task) => task[COL.T_ASSIGNEE] === currentUser.name);
-    const userTaskProjectIds = [...new Set(userTasks.map((task) => task[COL.T_PID]))];
-
-    // Thêm các dự án mà người dùng là người quản lý
-    const managedProjects = allProjects.filter(
-      (project) => project[COL.P_MANAGER] === currentUser.name
-    );
-    const managedProjectIds = managedProjects.map((p) => p[COL.P_ID]);
-
-    const projectIds = new Set([...userTaskProjectIds, ...managedProjectIds]);
-
-    return allProjects.filter((project) => projectIds.has(project[COL.P_ID]));
+      // Dự án mình có nhiệm vụ được giao (tham gia ngầm)
+      return allTasks.some(function(t) {
+        return t[COL.T_PID] === project[COL.P_ID] && t[COL.T_ASSIGNEE] === currentUser.name;
+      });
+    });
   }
 
   function canUserCreateTask() {
-    if (isAdmin() || isManager()) {
+    if (isAdmin() || isManager() || isTeamLeader()) {
       return true;
     }
 
