@@ -46,6 +46,7 @@
     T_RESULT_LINKS: 'Link kết quả',
     T_OUTPUT: 'Kết quả đầu ra',
     T_NOTES: 'Ghi chú',
+    T_COMMENTS: 'Bình luận',
     T_RECURRING: 'Lặp lại',
     T_RECURRING_INTERVAL: 'Chu kỳ lặp',
     T_CREATOR: 'Người tạo',
@@ -1312,6 +1313,12 @@
         }
       }
 
+      if (e.target.matches('.comment-btn') || e.target.closest('.comment-btn')) {
+        const btn = e.target.matches('.comment-btn') ? e.target : e.target.closest('.comment-btn');
+        const taskId = btn.dataset.id;
+        if (taskId) openCommentPanel(taskId);
+      }
+
       if (e.target.matches('.copy-btn') || e.target.closest('.copy-btn')) {
         const btn = e.target.matches('.copy-btn') ? e.target : e.target.closest('.copy-btn');
         const type = btn.dataset.type;
@@ -1628,10 +1635,12 @@
                           const isProjectManager =
                             project && project[COL.P_MANAGER] === currentUser.name;
                           const canCopyDelete = isAdmin() || isProjectManager;
+                          const _cCount = (() => { try { const r = task[COL.T_COMMENTS]; return r ? JSON.parse(r).length : 0; } catch(e){ return 0; } })();
 
                           return `
                             ${canCopyDelete ? `<button class="action-btn action-btn-copy copy-btn" data-type="task" data-id="${taskId}" data-name="${taskName}" title="Tạo bản sao"><i class="fas fa-copy"></i></button>` : ''}
                             <button class="action-btn action-btn-edit edit-btn" data-type="task" data-id="${taskId}" title="Chỉnh sửa"><i class="fas fa-edit"></i></button>
+                            <button class="action-btn action-btn-comment comment-btn" data-id="${taskId}" title="Bình luận"><i class="fas fa-comment"></i>${_cCount > 0 ? `<span class="comment-badge">${_cCount > 99 ? '99+' : _cCount}</span>` : ''}</button>
                             ${canCopyDelete ? `<button class="action-btn action-btn-delete delete-btn" data-type="task" data-id="${taskId}" data-name="${taskName}" title="Xóa"><i class="fas fa-trash"></i></button>` : ''}
                           `;
                         })()}
@@ -2216,9 +2225,14 @@
             const isProjectManager = project && project[COL.P_MANAGER] === currentUser.name;
             const canCopyDelete = isAdmin() || isProjectManager;
 
+            const _cCount2 = (() => { try { const r = task[COL.T_COMMENTS]; return r ? JSON.parse(r).length : 0; } catch(e){ return 0; } })();
             return `
               ${canCopyDelete ? `<button class="action-btn action-btn-copy copy-btn" data-type="task" data-id="${taskId}" data-name="${taskName}" title="Tạo bản sao"><i class="fas fa-copy"></i></button>` : ''}
               <button class="action-btn action-btn-edit edit-btn" data-type="task" data-id="${taskId}" title="Chỉnh sửa"><i class="fas fa-edit"></i></button>
+              <button class="action-btn action-btn-comment comment-btn" data-id="${taskId}" title="Bình luận">
+                <i class="fas fa-comment"></i>
+                ${_cCount2 > 0 ? `<span class="comment-badge">${_cCount2 > 99 ? '99+' : _cCount2}</span>` : ''}
+              </button>
               ${canCopyDelete ? `<button class="action-btn action-btn-delete delete-btn" data-type="task" data-id="${taskId}" data-name="${taskName}" title="Xóa"><i class="fas fa-trash"></i></button>` : ''}
             `;
           })()}
@@ -3985,6 +3999,124 @@
     }
   }
 
+  // ============================================================
+  // COMMENT PANEL
+  // ============================================================
+
+  let _commentTaskId = null;
+
+  function openCommentPanel(taskId) {
+    const task = allTasks.find(function(t) { return t[COL.T_ID] === taskId; });
+    if (!task) return;
+    _commentTaskId = taskId;
+
+    document.getElementById('comment-panel-title').textContent =
+      (task[COL.T_NAME] || taskId).substring(0, 50);
+    document.getElementById('comment-textarea').value = '';
+
+    _renderCommentList(task);
+
+    const panel = document.getElementById('comment-panel');
+    const overlay = document.getElementById('comment-panel-overlay');
+    panel.classList.add('open');
+    overlay.style.display = 'block';
+  }
+
+  function _renderCommentList(task) {
+    const list = document.getElementById('comment-list');
+    let comments = [];
+    try {
+      const raw = task[COL.T_COMMENTS];
+      if (raw) comments = JSON.parse(raw);
+    } catch (e) {}
+
+    if (!comments.length) {
+      list.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:32px 0;font-size:13px">Chưa có bình luận nào</div>';
+      return;
+    }
+
+    list.innerHTML = comments.map(function(c) {
+      const initial = (c.user || '?').charAt(0).toUpperCase();
+      const timeStr = c.time ? new Date(c.time).toLocaleString('vi-VN', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+      return '<div class="comment-item">' +
+        '<div class="comment-meta">' +
+          '<div class="comment-avatar">' + initial + '</div>' +
+          '<span class="comment-author">' + (c.user || '') + '</span>' +
+          '<span class="comment-time">' + timeStr + '</span>' +
+        '</div>' +
+        '<div class="comment-text">' + (c.text || '').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+      '</div>';
+    }).join('');
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function closeCommentPanel() {
+    document.getElementById('comment-panel').classList.remove('open');
+    document.getElementById('comment-panel-overlay').style.display = 'none';
+    _commentTaskId = null;
+  }
+
+  function submitComment() {
+    const text = document.getElementById('comment-textarea').value.trim();
+    if (!text || !_commentTaskId) return;
+    const btn = document.getElementById('comment-submit');
+    btn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false;
+        if (!res || !res.success) { showToast(res && res.error || 'Lỗi khi gửi bình luận', 'error'); return; }
+
+        // Update local task data
+        const task = allTasks.find(function(t) { return t[COL.T_ID] === _commentTaskId; });
+        if (task) {
+          let comments = [];
+          try { comments = task[COL.T_COMMENTS] ? JSON.parse(task[COL.T_COMMENTS]) : []; } catch(e) {}
+          comments.push(res.comment);
+          task[COL.T_COMMENTS] = JSON.stringify(comments);
+          _renderCommentList(task);
+        }
+        document.getElementById('comment-textarea').value = '';
+        _updateCommentBadge(_commentTaskId);
+        showToast('Đã gửi bình luận', 'success');
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false;
+        showToast('Lỗi: ' + err.message, 'error');
+      })
+      .addTaskComment(_commentTaskId, text);
+  }
+
+  function _updateCommentBadge(taskId) {
+    const task = allTasks.find(function(t) { return t[COL.T_ID] === taskId; });
+    if (!task) return;
+    let count = 0;
+    try { count = task[COL.T_COMMENTS] ? JSON.parse(task[COL.T_COMMENTS]).length : 0; } catch(e) {}
+    document.querySelectorAll('.comment-btn[data-id="' + taskId + '"]').forEach(function(btn) {
+      var badge = btn.querySelector('.comment-badge');
+      if (count > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'comment-badge';
+          btn.appendChild(badge);
+        }
+        badge.textContent = count > 99 ? '99+' : count;
+      } else if (badge) {
+        badge.remove();
+      }
+    });
+  }
+
+  // Wire up panel events once DOM is ready
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('comment-panel-close')?.addEventListener('click', closeCommentPanel);
+    document.getElementById('comment-panel-overlay')?.addEventListener('click', closeCommentPanel);
+    document.getElementById('comment-submit')?.addEventListener('click', submitComment);
+    document.getElementById('comment-textarea')?.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitComment();
+    });
+  });
+
   function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -4337,9 +4469,11 @@
                           const isProjectManager =
                             project && project[COL.P_MANAGER] === currentUser.name;
                           const canCopyDelete = isAdmin() || isProjectManager;
+                          const _cCountG = (() => { try { const r = task[COL.T_COMMENTS]; return r ? JSON.parse(r).length : 0; } catch(e){ return 0; } })();
                           return `
                             ${canCopyDelete ? `<button class="action-btn action-btn-copy copy-btn mr-1" data-type="task" data-id="${task[COL.T_ID]}" data-name="${task[COL.T_NAME]}" title="Tạo bản sao"><i class="fas fa-copy"></i></button>` : ''}
                             <button class="action-btn action-btn-edit edit-btn mr-1" data-type="task" data-id="${task[COL.T_ID]}" title="Chỉnh sửa"><i class="fas fa-edit"></i></button>
+                            <button class="action-btn action-btn-comment comment-btn mr-1" data-id="${task[COL.T_ID]}" title="Bình luận"><i class="fas fa-comment"></i>${_cCountG > 0 ? `<span class="comment-badge">${_cCountG > 99 ? '99+' : _cCountG}</span>` : ''}</button>
                             ${canCopyDelete ? `<button class="action-btn action-btn-delete delete-btn" data-type="task" data-id="${task[COL.T_ID]}" data-name="${task[COL.T_NAME]}" title="Xóa"><i class="fas fa-trash"></i></button>` : ''}
                             `;
                         })()}

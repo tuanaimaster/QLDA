@@ -20,7 +20,8 @@ from config import (
     COL_ACH_POINTS, COL_ACH_DATE, COL_ACH_DESC,
     T_ID, T_NAME, T_DESC, T_ASSIGNEE, T_STATUS, T_PRIORITY,
     T_START, T_DUE, T_COMPLETION, T_REPORT_DATE, T_TARGET,
-    T_NOTES, P_ID, P_NAME, P_MANAGER, P_STATUS, P_TASKS_JSON,
+    T_NOTES, P_ID, P_NAME, P_MANAGER, P_PARTICIPANTS, P_STATUS, P_TASKS_JSON,
+    ROLE_ADMIN, ROLE_MANAGER, ROLE_TEAM_LEADER,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,7 @@ class SheetsDB:
             "id": str(row.get(P_ID, "")),
             "name": str(row.get(P_NAME, "")),
             "manager": str(row.get(P_MANAGER, "")),
+            "participants": str(row.get(P_PARTICIPANTS, "")),
             "status": str(row.get(P_STATUS, "")),
             "tasks": tasks,
         }
@@ -157,6 +159,35 @@ class SheetsDB:
         ws = self._ws(SHEET_TASKS)
         rows = ws.get_all_records()
         return [self._parse_project_row(r) for r in rows]
+
+    def get_projects_for_user(self, staff_name: str, role: str) -> list[dict]:
+        """Return projects visible to a staff member based on their role.
+
+        - Admin: all projects
+        - Quản lý / Trưởng nhóm: projects they manage + are a participant in + have tasks in
+        - Nhân viên (default): projects they are a participant in + have tasks in
+        """
+        all_projects = self.get_all_projects()
+        role_lower = role.strip().lower()
+
+        if ROLE_ADMIN in role_lower:
+            return all_projects
+
+        result: list[dict] = []
+        for p in all_projects:
+            # Manager of this project
+            if p["manager"].strip() == staff_name.strip():
+                result.append(p)
+                continue
+            # Listed as participant
+            participants = [s.strip() for s in p["participants"].split(",") if s.strip()]
+            if staff_name.strip() in participants:
+                result.append(p)
+                continue
+            # Has at least one task assigned
+            if any(str(t.get(T_ASSIGNEE, "")).strip() == staff_name.strip() for t in p["tasks"]):
+                result.append(p)
+        return result
 
     def get_all_tasks(self) -> list[dict]:
         """Flatten all tasks from all projects."""

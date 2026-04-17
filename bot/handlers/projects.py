@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, ContextTypes
 
-from config import T_STATUS, T_ASSIGNEE
+from config import T_STATUS, T_ASSIGNEE, COL_STAFF_ROLE, COL_TG_STAFF, COL_STAFF_ID
 from sheets import SheetsDB
 
 logger = logging.getLogger(__name__)
@@ -22,11 +22,35 @@ STATUS_EMOJI = {
 }
 
 
+def _get_user_staff(db: SheetsDB, telegram_id: str) -> tuple[str, str]:
+    """Return (staff_name, role) for the linked Telegram user, or ('', '') if not linked."""
+    tg_row = db.get_telegram_user(telegram_id)
+    if not tg_row:
+        return "", ""
+    staff_id = str(tg_row.get(COL_TG_STAFF, "")).strip()
+    if staff_id:
+        staff = db.get_staff_by_id(staff_id)
+        if staff:
+            return str(staff.get("Họ tên", "")).strip(), str(staff.get(COL_STAFF_ROLE, "")).strip()
+    name = db.resolve_staff_name(tg_row)
+    return name, ""
+
+
 async def cmd_projects(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = SheetsDB.get()
-    projects = db.get_all_projects()
+    tg_id = str(update.effective_user.id)
+    staff_name, role = _get_user_staff(db, tg_id)
+
+    if not staff_name:
+        await update.effective_message.reply_text(
+            "❌ Bạn chưa liên kết tài khoản.\nDùng /link &lt;Mã NV&gt;.",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    projects = db.get_projects_for_user(staff_name, role)
     if not projects:
-        await update.effective_message.reply_text("📭 Không có dự án nào.")
+        await update.effective_message.reply_text("📭 Bạn không có dự án nào.")
         return
 
     lines = ["📁 <b>Danh sách dự án</b>\n"]
@@ -53,12 +77,22 @@ async def cmd_project(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     project_id = context.args[0].strip().upper()
     db = SheetsDB.get()
-    projects = db.get_all_projects()
+    tg_id = str(update.effective_user.id)
+    staff_name, role = _get_user_staff(db, tg_id)
+
+    # Filter projects by permission first
+    if staff_name:
+        projects = db.get_projects_for_user(staff_name, role)
+    else:
+        projects = db.get_all_projects()
+
     project = next((p for p in projects if p["id"] == project_id), None)
 
     if not project:
-        await update.effective_message.reply_text(f"❌ Không tìm thấy dự án <b>{project_id}</b>.",
-                                         parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(
+            f"❌ Không tìm thấy dự án <b>{project_id}</b> hoặc bạn không có quyền xem.",
+            parse_mode=ParseMode.HTML,
+        )
         return
 
     tasks = project.get("tasks", [])

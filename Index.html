@@ -1226,6 +1226,21 @@
     <!-- Toast Container -->
     <div id="toast-container" class="fixed bottom-6 right-6 z-50 space-y-3"></div>
 
+    <!-- Comment Panel -->
+    <div id="comment-panel">
+      <div id="comment-panel-header">
+        <i class="fas fa-comments" style="color:#8b5cf6"></i>
+        <span id="comment-panel-title">Bình luận</span>
+        <button id="comment-panel-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div id="comment-list"></div>
+      <div id="comment-input-area">
+        <textarea id="comment-textarea" rows="3" placeholder="Viết bình luận..."></textarea>
+        <button id="comment-submit"><i class="fas fa-paper-plane mr-1"></i>Gửi</button>
+      </div>
+    </div>
+    <div id="comment-panel-overlay" style="display:none;position:fixed;inset:0;z-index:1099;background:rgba(0,0,0,.25)"></div>
+
     <?!= include('js'); ?>
   </body>
 </html>

@@ -20,7 +20,7 @@ from telegram.ext import (
 from config import (
     T_ID, T_NAME, T_STATUS, T_PRIORITY, T_ASSIGNEE,
     T_DUE, T_START, T_COMPLETION, T_DESC,
-    TASK_STATUSES, PRIORITIES,
+    TASK_STATUSES, PRIORITIES, COL_STAFF_ROLE, COL_TG_STAFF,
 )
 from sheets import SheetsDB
 
@@ -250,9 +250,20 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                                          parse_mode=ParseMode.HTML)
         return ConversationHandler.END
 
-    projects = db.get_all_projects()
+    # Resolve staff name + role for permission filtering
+    staff_id = str(linked.get(COL_TG_STAFF, "")).strip()
+    staff_name, role = "", ""
+    if staff_id:
+        staff = db.get_staff_by_id(staff_id)
+        if staff:
+            staff_name = str(staff.get("Họ tên", "")).strip()
+            role = str(staff.get(COL_STAFF_ROLE, "")).strip()
+    if not staff_name:
+        staff_name = db.resolve_staff_name(linked)
+
+    projects = db.get_projects_for_user(staff_name, role) if staff_name else db.get_all_projects()
     if not projects:
-        await update.effective_message.reply_text("❌ Chưa có dự án nào.")
+        await update.effective_message.reply_text("❌ Bạn không có dự án nào.")
         return ConversationHandler.END
 
     context.user_data["add_task"] = {}

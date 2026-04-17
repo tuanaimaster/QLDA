@@ -23,6 +23,7 @@ const TASK_RESULT_LINKS_COLUMN_NAME = 'Link kết quả';
 const TASK_OUTPUT_COLUMN_NAME = 'Kết quả đầu ra';
 const TASK_NOTES_COLUMN_NAME = 'Ghi chú';
 const TASK_CREATED_BY_COLUMN_NAME = 'Người tạo';
+const TASK_COMMENTS_COLUMN_NAME = 'Bình luận';
 
 // === Cột sheet "Dự án" ===
 const PROJECT_ID_COLUMN_NAME = 'Mã dự án';
@@ -415,24 +416,14 @@ function getDataForUser() {
           return false;
         });
       } else {
-        // === Nhân viên: chỉ xem dự án mình đang tham gia ===
+        // === Nhân viên: chỉ xem dự án mình đang tham gia hoặc có nhiệm vụ ===
         tasks = tasks.filter((task) => {
-          const assignee = String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim();
-          if (assignee === currentUser.name) return true;
-          const projectId = task[TASK_PROJECT_ID_COLUMN_NAME];
-          const project = projects.find((p) => p[PROJECT_ID_COLUMN_NAME] === projectId);
-          return project && project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name;
+          return String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim() === currentUser.name;
         });
 
         const userTaskProjectIds = new Set(
           tasks.map((task) => task[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id)
         );
-        const userManagedProjects = projects.filter(
-          (project) => project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name
-        );
-        userManagedProjects.forEach((project) => {
-          userTaskProjectIds.add(project[PROJECT_ID_COLUMN_NAME]);
-        });
 
         projects = projects.filter((project) => {
           if (userTaskProjectIds.has(project[PROJECT_ID_COLUMN_NAME])) return true;
@@ -1504,6 +1495,64 @@ function deleteTask(taskId) {
   } catch (e) {
     console.error(`Error deleting task ${taskId}:`, e);
     return { success: false, error: `Lỗi khi xóa nhiệm vụ: ${e.message}` };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addTaskComment(taskId, commentText) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+
+    if (!taskId) return { success: false, error: 'Thiếu ID nhiệm vụ.' };
+    commentText = String(commentText || '').trim();
+    if (!commentText) return { success: false, error: 'Nội dung bình luận không được trống.' };
+
+    const user = getCurrentUser();
+    if (!user) return { success: false, error: 'Chưa đăng nhập.' };
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const projectSheet = ss.getSheetByName(PROJECT_SHEET_NAME);
+    if (!projectSheet) throw new Error('Không tìm thấy sheet dự án.');
+
+    const headers = getHeaders(projectSheet);
+    const jsonColIndex = headers.indexOf(PROJECT_TASKS_JSON_COLUMN_NAME);
+    if (jsonColIndex === -1) throw new Error('Không tìm thấy cột nhiệm vụ JSON.');
+
+    const lastRow = projectSheet.getLastRow();
+    for (let row = 2; row <= lastRow; row++) {
+      const jsonCell = projectSheet.getRange(row, jsonColIndex + 1);
+      try {
+        const jsonStr = jsonCell.getValue();
+        if (!jsonStr || typeof jsonStr !== 'string') continue;
+        const tasks = JSON.parse(jsonStr);
+        const taskIndex = tasks.findIndex((t) => t[TASK_ID_COLUMN_NAME] === taskId);
+        if (taskIndex === -1) continue;
+
+        const newComment = {
+          id: 'c' + new Date().getTime(),
+          user: user.name,
+          time: new Date().toISOString(),
+          text: commentText,
+        };
+
+        let existing = tasks[taskIndex][TASK_COMMENTS_COLUMN_NAME];
+        let comments = [];
+        try { comments = existing ? JSON.parse(existing) : []; } catch (e) { comments = []; }
+        comments.push(newComment);
+        tasks[taskIndex][TASK_COMMENTS_COLUMN_NAME] = JSON.stringify(comments);
+
+        jsonCell.setValue(formatJSONCompact(tasks));
+        SpreadsheetApp.flush();
+        return { success: true, comment: newComment };
+      } catch (e) {
+        continue;
+      }
+    }
+    return { success: false, error: 'Không tìm thấy nhiệm vụ.' };
+  } catch (e) {
+    return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
   }

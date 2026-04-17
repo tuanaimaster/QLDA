@@ -57,8 +57,14 @@ T_NOTES = "Ghi chú"
 P_ID = "Mã dự án"
 P_NAME = "Tên dự án"
 P_MANAGER = "Quản lý dự án"
+P_PARTICIPANTS = "Người tham gia"
 P_STATUS = "Trạng thái dự án"
 P_TASKS_JSON = "Nhiệm vụ JSON"
+
+# Roles
+ROLE_ADMIN = "admin"
+ROLE_MANAGER = "quản lý"
+ROLE_TEAM_LEADER = "trưởng nhóm"
 
 TASK_STATUSES = ["Chưa bắt đầu", "Đang thực hiện", "Hoàn thành", "Tạm dừng"]
 PRIORITIES = ["Cao", "Trung bình", "Thấp"]
