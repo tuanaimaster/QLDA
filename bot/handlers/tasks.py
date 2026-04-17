@@ -40,6 +40,72 @@ STATUS_EMOJI = {
 }
 PRIORITY_EMOJI = {"Cao": "🔴", "Trung bình": "🟡", "Thấp": "🟢"}
 
+# Kanban column order (active columns — Hoàn thành is hidden in count only)
+KANBAN_COLUMNS = ["Chưa bắt đầu", "Đang thực hiện", "Tạm dừng"]
+
+# Status transitions: what button moves a task from this status
+# Value: (target_status_index, button_label)
+_TRANSITIONS: dict[str, list[tuple[int, str]]] = {
+    "Chưa bắt đầu":  [(1, "▶️ Bắt đầu")],
+    "Đang thực hiện": [(2, "✅ Xong"), (3, "⏸️ Dừng")],
+    "Tạm dừng":       [(1, "▶️ Tiếp tục")],
+}
+
+
+def _build_kanban(my_name: str, tasks: list[dict]) -> tuple[str, InlineKeyboardMarkup]:
+    """Return (message_text, keyboard) for Kanban board view."""
+    active = [t for t in tasks if (t.get(T_STATUS) or "").strip() != "Hoàn thành"]
+    done_count = len(tasks) - len(active)
+
+    # Group by status
+    groups: dict[str, list] = {s: [] for s in KANBAN_COLUMNS}
+    for t in active:
+        st = (t.get(T_STATUS) or "").strip() or "Chưa bắt đầu"
+        groups.setdefault(st, []).append(t)
+
+    lines = [f"📋 <b>KANBAN</b> — <b>{my_name}</b>  ✅ {done_count} xong\n"]
+    keyboard_rows: list[list[InlineKeyboardButton]] = []
+
+    for col_status in KANBAN_COLUMNS:
+        col_tasks = groups.get(col_status, [])
+        if not col_tasks:
+            continue
+        col_emoji = STATUS_EMOJI.get(col_status, "📌")
+        lines.append(f"{'━' * 16}")
+        lines.append(f"{col_emoji} <b>{col_status}</b>  · {len(col_tasks)} nhiệm vụ")
+
+        shown = col_tasks[:5]
+        for t in shown:
+            tid    = t.get(T_ID, "")
+            tname  = t.get(T_NAME, "")
+            prio   = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
+            due    = t.get(T_DUE, "")
+            due_str = f" ⏰{due}" if due else ""
+            proj   = t.get("_projectName", "")
+            proj_str = f"  <i>({proj[:14]})</i>" if proj else ""
+            lines.append(f"  {prio} <code>{tid}</code> {tname[:32]}{due_str}{proj_str}")
+
+            # Inline buttons for this task
+            transitions = _TRANSITIONS.get(col_status, [])
+            if transitions:
+                row_btns = []
+                for target_idx, btn_label in transitions:
+                    target_status = TASK_STATUSES[target_idx]
+                    row_btns.append(InlineKeyboardButton(
+                        f"{btn_label}: {tname[:18]}",
+                        callback_data=f"tmove:{tid}:{target_idx}",
+                    ))
+                keyboard_rows.append(row_btns)
+
+        if len(col_tasks) > 5:
+            lines.append(f"  <i>...và {len(col_tasks) - 5} nhiệm vụ khác</i>")
+
+    if not active:
+        lines.append("\n🎉 <b>Tất cả nhiệm vụ đã hoàn thành!</b> Xuất sắc!")
+
+    keyboard_rows.append([InlineKeyboardButton("🔄 Làm mới", callback_data="tmove:__refresh__:0")])
+    return "\n".join(lines), InlineKeyboardMarkup(keyboard_rows)
+
 
 def _require_linked(func):
     """Decorator: reject command if user hasn't linked their account."""
@@ -58,7 +124,7 @@ def _require_linked(func):
 
 
 # ------------------------------------------------------------------
-# /mytasks — with inline ✅ buttons per active task
+# /mytasks — Kanban board view
 # ------------------------------------------------------------------
 async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     db = SheetsDB.get()
@@ -81,90 +147,69 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
 
-    active = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() != "Hoàn thành"]
-    done   = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() == "Hoàn thành"]
-
-    lines = [f"📋 <b>Nhiệm vụ của {my_name}</b>  ({len(active)} đang làm · ✅{len(done)})\n"]
-    keyboard_rows = []
-    for t in active[:10]:
-        tid   = t.get(T_ID, "")
-        tname = t.get(T_NAME, "")
-        emoji = STATUS_EMOJI.get((t.get(T_STATUS) or "").strip(), "📌")
-        prio  = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
-        due   = t.get(T_DUE, "")
-        due_str = f" ⏰{due}" if due else ""
-        lines.append(f"{emoji}{prio} <code>{tid}</code> {tname}{due_str}")
-        keyboard_rows.append([
-            InlineKeyboardButton(f"✅ Xong: {tname[:28]}", callback_data=f"tdone:{tid}")
-        ])
-
-    if len(active) > 10:
-        lines.append(f"\n…và {len(active) - 10} nhiệm vụ khác")
-
-    keyboard_rows.append([InlineKeyboardButton("🔄 Làm mới", callback_data="tdone:__refresh__")])
-
-    await update.effective_message.reply_text(
-        "\n".join(lines),
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard_rows),
-    )
+    text, keyboard = _build_kanban(my_name, tasks)
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
 
 
-async def handle_task_done_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle tdone:<task_id> or tdone:__refresh__ inline buttons."""
+async def handle_task_move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle tmove:<task_id>:<status_idx> and legacy tdone:<task_id> inline buttons."""
     query = update.callback_query
-    await query.answer()
-    task_id = query.data.split(":", 1)[1]
+    raw = query.data  # e.g. 'tmove:DA001-01:2'  or  'tdone:DA001-01'
 
-    if task_id == "__refresh__":
-        await cmd_mytasks(update, context)
-        return
+    # Parse legacy tdone: format
+    if raw.startswith("tdone:"):
+        task_id = raw.split(":", 1)[1]
+        if task_id == "__refresh__":
+            await query.answer()
+            await cmd_mytasks(update, context)
+            return
+        status_idx = 2  # Hoàn thành
+    else:
+        parts = raw.split(":")
+        task_id = parts[1] if len(parts) > 1 else ""
+        if task_id == "__refresh__":
+            await query.answer()
+            await cmd_mytasks(update, context)
+            return
+        try:
+            status_idx = int(parts[2]) if len(parts) > 2 else 2
+        except ValueError:
+            status_idx = 2
+
+    new_status = TASK_STATUSES[status_idx] if 0 <= status_idx < len(TASK_STATUSES) else "Hoàn thành"
+    await query.answer()
 
     db = SheetsDB.get()
-    result = db.update_task_status(task_id.upper(), "Hoàn thành")
+    result = db.update_task_status(task_id.upper(), new_status)
     if not result.get("success"):
         await query.answer(f"❌ {result.get('error', 'Lỗi')}", show_alert=True)
         return
 
     task = result.get("task", {})
     tname = task.get(T_NAME, task_id)
-    # Refresh the task list in the same message
+    status_emoji = STATUS_EMOJI.get(new_status, "📌")
+
+    # Build status-change header
+    if new_status == "Hoàn thành":
+        header = f"✅ <b>Hoàn thành:</b> {tname} 🎉\n⭐ Điểm thưởng sẽ được cộng vào tài khoản!"
+    elif new_status == "Đang thực hiện":
+        header = f"▶️ <b>Bắt đầu:</b> {tname}  — Chúc bạn làm việc hiệu quả!"
+    elif new_status == "Tạm dừng":
+        header = f"⏸️ <b>Tạm dừng:</b> {tname}"
+    else:
+        header = f"{status_emoji} <b>{new_status}:</b> {tname}"
+
+    # Rebuild kanban after update
     linked = db.get_telegram_user(str(update.effective_user.id))
     my_name = db.resolve_staff_name(linked) if linked else ""
     tasks = db.get_tasks_for_assignee(my_name)
-    active = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() != "Hoàn thành"]
-    done   = [t for t in tasks if (t.get(T_STATUS, "") or "").strip() == "Hoàn thành"]
-
-    lines = [
-        f"✅ <b>Hoàn thành:</b> {tname} 🎉\n",
-        f"📋 <b>Nhiệm vụ của {my_name}</b>  ({len(active)} đang làm · ✅{len(done)})\n",
-    ]
-    keyboard_rows = []
-    for t in active[:10]:
-        tid   = t.get(T_ID, "")
-        tname2 = t.get(T_NAME, "")
-        emoji = STATUS_EMOJI.get((t.get(T_STATUS) or "").strip(), "📌")
-        prio  = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
-        due   = t.get(T_DUE, "")
-        due_str = f" ⏰{due}" if due else ""
-        lines.append(f"{emoji}{prio} <code>{tid}</code> {tname2}{due_str}")
-        keyboard_rows.append([
-            InlineKeyboardButton(f"✅ Xong: {tname2[:28]}", callback_data=f"tdone:{tid}")
-        ])
-
-    if not active:
-        lines.append("🎉 Tất cả nhiệm vụ đã hoàn thành!")
-
-    keyboard_rows.append([InlineKeyboardButton("🔄 Làm mới", callback_data="tdone:__refresh__")])
+    kanban_text, kanban_kb = _build_kanban(my_name, tasks)
+    full_text = f"{header}\n\n{kanban_text}"
 
     try:
-        await query.edit_message_text(
-            "\n".join(lines),
-            parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard_rows),
-        )
+        await query.edit_message_text(full_text, parse_mode=ParseMode.HTML, reply_markup=kanban_kb)
     except Exception:
-        pass  # Message may be unchanged if no active tasks left
+        pass
 
 
 # ------------------------------------------------------------------
@@ -452,7 +497,9 @@ def register(app) -> None:
     app.add_handler(CommandHandler("mytasks", cmd_mytasks))
     app.add_handler(CommandHandler("donetask", cmd_donetask))
     app.add_handler(CommandHandler("assign", cmd_assign))
-    app.add_handler(CallbackQueryHandler(handle_task_done_callback, pattern=r"^tdone:"))
+    # Handle both new tmove: and legacy tdone: callback patterns
+    app.add_handler(CallbackQueryHandler(handle_task_move_callback, pattern=r"^tmove:"))
+    app.add_handler(CallbackQueryHandler(handle_task_move_callback, pattern=r"^tdone:"))
 
     add_conv = ConversationHandler(
         entry_points=[CommandHandler("addtask", add_start)],

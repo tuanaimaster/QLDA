@@ -172,9 +172,15 @@ async def send_pending_task_notifications(bot: Bot) -> None:
             if notif_type == "assigned":
                 header_line = f"📬 <b>BẠN CÓ NHIỆM VỤ MỚI ĐƯỢC GIAO!</b>"
                 from_line   = f"👤 Người giao: <b>{creator}</b>" if creator else ""
+                xp_line     = f"⭐ <b>+10 XP</b> cho nhiệm vụ mới!"
+            elif notif_type == "completed":
+                header_line = f"✅ <b>NHIỆM VỤ ĐÃ HOÀN THÀNH!</b>"
+                from_line   = f"👤 Xác nhận bởi: <b>{creator}</b>" if creator else ""
+                xp_line     = f"🌟 <b>+XP điểm thưởng được cộng vào tài khoản!</b>"
             else:
-                header_line = f"✅ <b>NHIỆM VỤ ĐÃ ĐƯỢC TẠO!</b>"
+                header_line = f"📋 <b>NHIỆM VỤ MỚI!</b>"
                 from_line   = f"👤 Người tạo: <b>{creator}</b>" if creator else ""
+                xp_line     = f"⭐ <b>+10 XP</b> được cộng vào tài khoản!"
 
             lines = [
                 header_line,
@@ -187,7 +193,7 @@ async def send_pending_task_notifications(bot: Bot) -> None:
                 lines.append(from_line)
             lines += [
                 "",
-                f"⭐ <b>+10 XP</b> được cộng vào tài khoản của bạn!",
+                xp_line,
                 "",
                 tip,
                 "",
