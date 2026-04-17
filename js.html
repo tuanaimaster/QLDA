@@ -1,5 +1,12 @@
 <!-- js.html -->
 <script>
+  // === Phong Thủy Theme — áp dụng ngay khi script tải (trước DOMContentLoaded) ===
+  (function () {
+    const saved = localStorage.getItem('qlda-theme') || 'kim';
+    document.body.classList.remove('theme-kim', 'theme-moc', 'theme-thuy', 'theme-hoa', 'theme-tho');
+    document.body.classList.add('theme-' + saved);
+  })();
+
   // === Global Variables ===
   let chartInstance = null;
   let projectProgressChart = null;
@@ -7586,5 +7593,40 @@
       </div>`;
     document.getElementById('modals-container').insertAdjacentHTML('beforeend', certHTML);
   }
+  // ════════════════════════════════════════════════════════
+  // PHONG THỦY THEME SWITCHER
+  // ════════════════════════════════════════════════════════
+  const THEME_NAMES = {
+    kim:  '⚪ Kim — Bạch Kim',
+    moc:  '🟢 Mộc — Lâm Phong',
+    thuy: '💙 Thủy — Thương Hải',
+    hoa:  '🌸 Hỏa — Chu Hồng',
+    tho:  '🟡 Thổ — Hoàng Kim',
+  };
+
+  function setTheme(name) {
+    if (!THEME_NAMES[name]) return;
+    document.body.classList.remove('theme-kim', 'theme-moc', 'theme-thuy', 'theme-hoa', 'theme-tho');
+    document.body.classList.add('theme-' + name);
+    localStorage.setItem('qlda-theme', name);
+    _updateThemeSwatches(name);
+    showToast(`${THEME_NAMES[name]} đã áp dụng`, 'info');
+  }
+
+  function _updateThemeSwatches(activeName) {
+    document.querySelectorAll('.theme-swatch').forEach(function (btn) {
+      const t = btn.dataset.theme;
+      btn.classList.toggle('active', t === activeName);
+    });
+  }
+
+  // Khởi tạo swatch active sau khi DOM sẵn sàng
+  document.addEventListener('DOMContentLoaded', function () {
+    const saved = localStorage.getItem('qlda-theme') || 'kim';
+    _updateThemeSwatches(saved);
+    document.querySelectorAll('.theme-swatch').forEach(function (btn) {
+      btn.addEventListener('click', function () { setTheme(btn.dataset.theme); });
+    });
+  });
 
 </script>

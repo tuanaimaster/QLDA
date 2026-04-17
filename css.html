@@ -4193,4 +4193,70 @@
     .gm-lb-podium { gap: 6px; }
     .gm-lb-pod-card { padding: 10px 6px; }
   }
+
+  /* ══════════════════════════════════════════
+     PHONG THỦY THEMES — 5 mệnh màu sắc
+  ══════════════════════════════════════════ */
+  /* Kim — Bạch Kim (trắng/tím/xanh dương) — Mặc định */
+  body.theme-kim {
+    background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #eef2ff 100%) !important;
+  }
+  /* Mộc — Lâm Phong (xanh lá/ngọc bích) */
+  body.theme-moc {
+    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #d1fae5 100%) !important;
+  }
+  /* Thủy — Thương Hải (xanh biển/cyan) */
+  body.theme-thuy {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #cffafe 100%) !important;
+  }
+  /* Hỏa — Chu Hồng (hồng/cam/đào) */
+  body.theme-hoa {
+    background: linear-gradient(135deg, #fff1f2 0%, #fce7f3 50%, #ffedd5 100%) !important;
+  }
+  /* Thổ — Hoàng Kim (vàng/hổ phách) */
+  body.theme-tho {
+    background: linear-gradient(135deg, #fffbeb 0%, #fefce8 50%, #fef3c7 100%) !important;
+  }
+
+  /* Theme swatches picker */
+  .theme-picker-wrap {
+    padding: 10px 0 6px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    margin-top: 8px;
+  }
+  .theme-picker-label {
+    font-size: 10px;
+    color: #94a3b8;
+    text-align: center;
+    margin-bottom: 8px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .theme-swatches {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+  }
+  .theme-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2.5px solid #fff;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, outline 0.15s ease;
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    position: relative;
+  }
+  .theme-swatch:hover {
+    transform: scale(1.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.22);
+  }
+  .theme-swatch.active {
+    outline: 2.5px solid #6366f1;
+    outline-offset: 3px;
+    transform: scale(1.12);
+  }
 </style>

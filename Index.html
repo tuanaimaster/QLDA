@@ -20,7 +20,7 @@
     <?!= include('css'); ?>
   </head>
 
-  <body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen font-inter">
+  <body class="theme-kim min-h-screen font-inter">
     <!-- Mobile Menu Overlay -->
     <div
       id="mobile-overlay"
@@ -243,6 +243,27 @@
       <!-- Footer info -->
       <div class="absolute bottom-6 left-6 right-6">
         <div class="glass-card p-4 text-center">
+          <!-- Phong Thủy Theme Picker -->
+          <div class="theme-picker-wrap">
+            <div class="theme-picker-label">✨ Phù hợp phong thủy</div>
+            <div class="theme-swatches">
+              <button class="theme-swatch" data-theme="kim"
+                style="background: linear-gradient(135deg, #93c5fd, #a5b4fc)"
+                title="Kim — Bạch Kim (Thanh thản)"></button>
+              <button class="theme-swatch" data-theme="moc"
+                style="background: linear-gradient(135deg, #6ee7b7, #34d399)"
+                title="Mộc — Lâm Phong (Phát triển)"></button>
+              <button class="theme-swatch" data-theme="thuy"
+                style="background: linear-gradient(135deg, #38bdf8, #22d3ee)"
+                title="Thủy — Thương Hải (Trí tuệ)"></button>
+              <button class="theme-swatch" data-theme="hoa"
+                style="background: linear-gradient(135deg, #f9a8d4, #fb923c)"
+                title="Hỏa — Chu Hồng (Năng lượng)"></button>
+              <button class="theme-swatch" data-theme="tho"
+                style="background: linear-gradient(135deg, #fcd34d, #f59e0b)"
+                title="Thổ — Hoàng Kim (Vững chắc)"></button>
+            </div>
+          </div>
           <div class="text-sm font-semibold text-gray-700 mb-2">
             Hỗ trợ kỹ thuật
             <span style="font-size: 11px; font-weight: 400; color: #999; margin-left: 4px"
