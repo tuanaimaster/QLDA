@@ -222,6 +222,22 @@
             class="ml-auto w-2 h-2 rounded-full bg-amber-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           ></div>
         </a>
+
+        <a
+          href="#"
+          data-section="connect"
+          class="nav-link group flex items-center px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200"
+        >
+          <div
+            class="w-8 h-8 rounded-lg bg-sky-100 group-hover:bg-sky-200 flex items-center justify-center mr-3 transition-colors duration-200"
+          >
+            <i class="fab fa-telegram text-sky-500 text-sm"></i>
+          </div>
+          <span>Kết nối</span>
+          <div
+            class="ml-auto w-2 h-2 rounded-full bg-sky-500 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          ></div>
+        </a>
       </nav>
 
       <!-- Footer info -->
@@ -1129,6 +1145,76 @@
                 <div class="loading-card py-16">Đang tải dữ liệu sơ đồ Gantt...</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+      <!-- Connect Section -->
+      <div id="connect-section" class="section">
+        <div class="mb-6">
+          <h3 class="text-2xl font-bold text-gray-900 mb-1">🔗 Kết nối</h3>
+          <p class="text-gray-500">Liên kết tài khoản QLDA với Telegram để nhận thông báo và quản lý nhiệm vụ ngay trên điện thoại.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Card 1: Telegram Bot -->
+          <div class="glass-card p-6">
+            <div class="flex items-center mb-4">
+              <div class="w-12 h-12 bg-sky-100 rounded-2xl flex items-center justify-center mr-4">
+                <i class="fab fa-telegram text-sky-500 text-2xl"></i>
+              </div>
+              <div>
+                <h4 class="text-lg font-bold text-gray-900">TrolyQLDAbot</h4>
+                <p class="text-sm text-gray-500">Quản lý dự án qua Telegram</p>
+              </div>
+            </div>
+            <!-- Steps -->
+            <div class="space-y-3 mb-5">
+              <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                <p class="text-sm text-gray-700">Mở Telegram, tìm bot <b>@Trolytrieudobot</b> hoặc nhấn nút bên dưới</p>
+              </div>
+              <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                <p class="text-sm text-gray-700">Gửi lệnh <code class="bg-gray-100 px-1 rounded">/start</code></p>
+              </div>
+              <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                <p class="text-sm text-gray-700">Nhấn <b>"🔗 Chọn tên để liên kết"</b> → chọn tên của bạn trong danh sách</p>
+              </div>
+              <div class="flex items-start gap-3">
+                <span class="w-6 h-6 rounded-full bg-green-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">✓</span>
+                <p class="text-sm text-gray-700">Hoàn tất! Bot sẽ gửi thông báo nhiệm vụ cho bạn lúc 18:00 mỗi ngày</p>
+              </div>
+            </div>
+            <a href="https://t.me/Trolytrieudobot" target="_blank"
+               class="btn-primary w-full flex items-center justify-center gap-2">
+              <i class="fab fa-telegram"></i> Mở Telegram Bot
+            </a>
+          </div>
+
+          <!-- Card 2: Support Group -->
+          <div class="glass-card p-6">
+            <div class="flex items-center mb-4">
+              <div class="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mr-4">
+                <i class="fas fa-users text-purple-500 text-2xl"></i>
+              </div>
+              <div>
+                <h4 class="text-lg font-bold text-gray-900">Nhóm Hỗ Trợ QLDA</h4>
+                <p class="text-sm text-gray-500">Cộng đồng &amp; hỗ trợ kỹ thuật</p>
+              </div>
+            </div>
+            <p class="text-sm text-gray-600 mb-4">
+              Tham gia nhóm Telegram để nhận thông báo cập nhật hệ thống, hỏi đáp và hỗ trợ kỹ thuật từ đội ngũ phát triển.
+            </p>
+            <ul class="space-y-2 mb-5 text-sm text-gray-600">
+              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> Thông báo cập nhật tính năng mới</li>
+              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> Hỗ trợ lỗi và sự cố kỹ thuật</li>
+              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> Chia sẻ kinh nghiệm quản lý dự án</li>
+            </ul>
+            <a href="https://t.me/HotroQLDA" target="_blank"
+               class="btn-secondary w-full flex items-center justify-center gap-2">
+              <i class="fab fa-telegram"></i> Tham gia nhóm hỗ trợ
+            </a>
           </div>
         </div>
       </div>
