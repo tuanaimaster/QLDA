@@ -4,6 +4,7 @@ handlers/notifications.py — Gửi thông báo lên cấp qua Telegram
 from __future__ import annotations
 
 import logging
+import random
 
 from telegram import Bot
 
@@ -97,3 +98,120 @@ def _mark_sent(db: SheetsDB, row_index: int) -> None:
         ws.update_cell(row_index, col, "TRUE")
     except Exception as exc:
         logger.error("_mark_sent error: %s", exc)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task assignment notifications
+# ─────────────────────────────────────────────────────────────────────────────
+
+SHEET_TASK_NOTIF = "Hàng Đợi TG"
+
+COL_TN_TASK_ID   = "Task ID"
+COL_TN_TASK_NAME = "Tên nhiệm vụ"
+COL_TN_ASSIGNEE  = "Người nhận"
+COL_TN_PROJECT   = "Tên dự án"
+COL_TN_CREATOR   = "Người tạo"
+COL_TN_TYPE      = "Loại"
+COL_TN_TIME      = "Thời gian"
+COL_TN_SENT      = "Đã gửi"
+
+_MOTIVATIONAL_TIPS = [
+    "💡 Gợi ý: Hãy chia nhỏ nhiệm vụ thành các bước hành động cụ thể để dễ hoàn thành hơn!",
+    "🔥 Mẹo: Dùng kỹ thuật Pomodoro — làm việc tập trung 25 phút rồi nghỉ 5 phút để duy trì năng suất.",
+    "🚀 Gợi ý: Xác định kết quả đầu ra rõ ràng trước khi bắt đầu để tiết kiệm thời gian chỉnh sửa.",
+    "🎯 Mẹo: Hãy hoàn thành phần khó nhất trước — sau đó mọi thứ sẽ trở nên dễ dàng hơn!",
+    "📈 Gợi ý: Cập nhật tiến độ thường xuyên trên hệ thống để nhóm luôn đồng bộ với nhau.",
+    "🤝 Gợi ý: Nếu gặp khó khăn, đừng ngại nhờ đồng nghiệp hỗ trợ — teamwork là sức mạnh!",
+    "⭐ Mẹo: Ghi lại kết quả ngay khi hoàn thành để không bỏ sót bất kỳ thành tích nào.",
+    "🌟 Gợi ý: Đặt deadline cá nhân sớm hơn deadline thật 1–2 ngày để luôn đúng hẹn.",
+    "💪 Mẹo: Mỗi nhiệm vụ hoàn thành là một bước tiến trên bảng xếp hạng — hãy phấn đấu lên top!",
+    "🧠 Gợi ý: Đọc lại mô tả nhiệm vụ kỹ trước khi bắt đầu để hiểu đúng yêu cầu.",
+]
+
+
+async def send_pending_task_notifications(bot: Bot) -> None:
+    """
+    Được gọi bởi scheduler mỗi 60 giây.
+    Quét sheet 'Hàng Đợi TG', gửi thông báo nhiệm vụ cho người được giao.
+    """
+    try:
+        db = SheetsDB.get()
+        ws = db._ws(SHEET_TASK_NOTIF)
+        records = ws.get_all_records()
+
+        for i, row in enumerate(records):
+            if str(row.get(COL_TN_SENT, "")).strip().upper() == "TRUE":
+                continue
+
+            row_idx = i + 2  # 1-based + header row
+            assignee_name = str(row.get(COL_TN_ASSIGNEE, "")).strip()
+            task_name     = str(row.get(COL_TN_TASK_NAME, "")).strip()
+            task_id       = str(row.get(COL_TN_TASK_ID, "")).strip()
+            project_name  = str(row.get(COL_TN_PROJECT, "")).strip()
+            creator       = str(row.get(COL_TN_CREATOR, "")).strip()
+            notif_type    = str(row.get(COL_TN_TYPE, "created")).strip()
+
+            # Always mark as sent even if we can't deliver — avoids infinite retry
+            _mark_task_notif_sent(ws, row_idx, records[0] if records else {})
+
+            if not assignee_name:
+                continue
+
+            # Look up the assignee's Telegram ID
+            tg_user = db.get_telegram_user_by_name(assignee_name)
+            if not tg_user:
+                logger.debug("No Telegram link for assignee '%s' — skip", assignee_name)
+                continue
+
+            tg_id = str(tg_user).strip()
+            if not tg_id:
+                continue
+
+            tip = random.choice(_MOTIVATIONAL_TIPS)
+
+            if notif_type == "assigned":
+                header_line = f"📬 <b>BẠN CÓ NHIỆM VỤ MỚI ĐƯỢC GIAO!</b>"
+                from_line   = f"👤 Người giao: <b>{creator}</b>" if creator else ""
+            else:
+                header_line = f"✅ <b>NHIỆM VỤ ĐÃ ĐƯỢC TẠO!</b>"
+                from_line   = f"👤 Người tạo: <b>{creator}</b>" if creator else ""
+
+            lines = [
+                header_line,
+                "",
+                f"📋 Nhiệm vụ: <b>{task_name}</b>",
+                f"🆔 Mã: <code>{task_id}</code>",
+                f"📁 Dự án: {project_name}",
+            ]
+            if from_line:
+                lines.append(from_line)
+            lines += [
+                "",
+                f"⭐ <b>+10 XP</b> được cộng vào tài khoản của bạn!",
+                "",
+                tip,
+                "",
+                "Dùng /mytasks để xem danh sách nhiệm vụ của bạn.",
+            ]
+
+            try:
+                await bot.send_message(
+                    chat_id=tg_id,
+                    text="\n".join(lines),
+                    parse_mode="HTML",
+                )
+                logger.info("Task notification sent → %s (%s) [%s]", assignee_name, tg_id, notif_type)
+            except Exception as exc:
+                logger.error("Failed to send task notif to %s: %s", assignee_name, exc)
+
+    except Exception as exc:
+        logger.error("send_pending_task_notifications error: %s", exc)
+
+
+def _mark_task_notif_sent(ws, row_index: int, first_record: dict) -> None:
+    try:
+        headers = ws.row_values(1)
+        col = headers.index(COL_TN_SENT) + 1
+        ws.update_cell(row_index, col, "TRUE")
+    except Exception as exc:
+        logger.error("_mark_task_notif_sent error: %s", exc)

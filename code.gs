@@ -5,6 +5,7 @@ const TASK_SHEET_NAME = 'Nhiệm vụ';
 const PROJECT_SHEET_NAME = 'Dự án/Nhiệm vụ';
 const STAFF_SHEET_NAME = 'Người dùng';
 const NOTIFICATION_SHEET_NAME = 'Thông báo';
+const TASK_NOTIFICATION_SHEET_NAME = 'Hàng Đợi TG';
 
 // === "Nhiệm vụ" ===
 const TASK_ID_COLUMN_NAME = 'Mã nhiệm vụ';
@@ -864,26 +865,8 @@ function checkUserPermission(action, resourceType, resourceData = null) {
 
     case 'task':
       if (action === 'create') {
-        // Kiểm tra nếu người dùng là người phụ trách của bất kỳ dự án nào
-        const projects = getProjects();
-        const userManagedProjects = projects.filter(
-          (project) => project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name
-        );
-        if (userManagedProjects.length > 0) {
-          return { success: true }; // Người phụ trách dự án có thể tạo nhiệm vụ
-        }
-
-        // User can create tasks if they have at least one task in a project
-        const userTasks = getTasks().filter(
-          (task) => task[TASK_ASSIGNEE_COLUMN_NAME] === currentUser.name
-        );
-        if (userTasks.length > 0) {
-          return { success: true };
-        }
-        return {
-          success: false,
-          error: 'Bạn chỉ có thể tạo nhiệm vụ trong các dự án mà bạn đã được giao việc',
-        };
+        // Mọi người dùng đã đăng nhập đều có thể tạo nhiệm vụ
+        return { success: true };
       }
       if (action === 'update' || action === 'delete') {
         // Check if user is project manager for this task
@@ -1250,6 +1233,15 @@ function addTask(taskData) {
       taskData.projectId
     );
 
+    // Ghi hàng chờ thông báo Telegram
+    try {
+      const projectNameColIdx = headers.indexOf(PROJECT_NAME_COLUMN_NAME);
+      const projectName = projectNameColIdx !== -1
+        ? projectSheet.getRange(projectRowInfo.rowNumber, projectNameColIdx + 1).getValue()
+        : taskData.projectId;
+      queueTaskNotification(newTaskId, taskData.name, taskData.assignee, projectName, 'created', newTask[TASK_CREATED_BY_COLUMN_NAME]);
+    } catch (e) { /* không ảnh hưởng đến kết quả chính */ }
+
     return { success: true, taskId: newTaskId };
   } catch (e) {
     console.error(`Error adding task:`, e);
@@ -1409,6 +1401,7 @@ function updateTask(taskId, taskData) {
     }
 
     const updatedTask = oldTasks[foundTaskIndex];
+    const previousAssignee = (updatedTask[TASK_ASSIGNEE_COLUMN_NAME] || '').trim(); // Lưu lại người cũ
     updatedTask[TASK_NAME_COLUMN_NAME] = String(taskData.name).trim();
     updatedTask[TASK_DESC_COLUMN_NAME] = taskData.description
       ? String(taskData.description).trim()
@@ -1434,6 +1427,19 @@ function updateTask(taskId, taskData) {
     SpreadsheetApp.flush();
 
     logActivity('Cập nhật nhiệm vụ', `ID: ${taskId}, Tên: ${taskData.name}`, taskData.projectId);
+
+    // Ghi hàng chờ thông báo Telegram nếu có thay đổi người thực hiện
+    try {
+      const newAssignee = (taskData.assignee || '').trim();
+      if (newAssignee && newAssignee !== previousAssignee) {
+        const projectNameColIdx2 = headers.indexOf(PROJECT_NAME_COLUMN_NAME);
+        const projectNameVal = projectNameColIdx2 !== -1
+          ? projectSheet.getRange(oldProjectRow, projectNameColIdx2 + 1).getValue()
+          : taskData.projectId;
+        const currentUser2 = getCurrentUser();
+        queueTaskNotification(taskId, taskData.name, newAssignee, projectNameVal, 'assigned', currentUser2 ? currentUser2.name : '');
+      }
+    } catch (e) { /* không ảnh hưởng đến kết quả chính */ }
 
     return { success: true, updated: true };
   } catch (e) {
@@ -1555,6 +1561,34 @@ function addTaskComment(taskId, commentText) {
     return { success: false, error: e.message };
   } finally {
     lock.releaseLock();
+  }
+}
+
+/**
+ * Ghi hàng chờ thông báo Telegram khi nhiệm vụ được tạo / phân công
+ */
+function queueTaskNotification(taskId, taskName, assignee, projectName, type, createdBy) {
+  try {
+    if (!assignee || !assignee.trim()) return; // không có người nhận thì bỏ qua
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(TASK_NOTIFICATION_SHEET_NAME);
+    if (!sheet) {
+      // Tạo sheet nếu chưa có
+      sheet = ss.insertSheet(TASK_NOTIFICATION_SHEET_NAME);
+      sheet.appendRow(['Task ID', 'Tên nhiệm vụ', 'Người nhận', 'Tên dự án', 'Người tạo', 'Loại', 'Thời gian', 'Đã gửi']);
+    }
+    sheet.appendRow([
+      taskId || '',
+      taskName || '',
+      assignee.trim(),
+      projectName || '',
+      createdBy || '',
+      type || 'created',
+      new Date().toISOString(),
+      'FALSE'
+    ]);
+  } catch (e) {
+    console.error('queueTaskNotification error:', e);
   }
 }
 

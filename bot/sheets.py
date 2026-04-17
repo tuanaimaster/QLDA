@@ -315,6 +315,26 @@ class SheetsDB:
                 return row
         return None
 
+    def get_telegram_user_by_name(self, staff_name: str) -> str | None:
+        """Trả về Telegram ID cho một nhân viên theo tên (Họ tên). None nếu chưa liên kết."""
+        try:
+            # Bước 1: tìm Mã NV theo tên nhân viên
+            staff_id = None
+            for s in self.get_all_staff():
+                if str(s.get(COL_STAFF_NAME, "")).strip() == staff_name.strip():
+                    staff_id = str(s.get(COL_STAFF_ID, "")).strip()
+                    break
+            if not staff_id:
+                return None
+            # Bước 2: tìm Telegram ID theo Mã NV
+            for row in self._ws(SHEET_TELEGRAM_USERS).get_all_records():
+                if str(row.get(COL_TG_STAFF, "")).strip() == staff_id:
+                    tg_id = str(row.get(COL_TG_ID, "")).strip()
+                    return tg_id if tg_id else None
+        except Exception as exc:
+            logger.debug("get_telegram_user_by_name error: %s", exc)
+        return None
+
     def get_all_telegram_users(self) -> list[dict]:
         try:
             return self._ws(SHEET_TELEGRAM_USERS).get_all_records()

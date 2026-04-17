@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def setup_scheduler(bot) -> AsyncIOScheduler:
     from handlers.daily import send_daily_summary
-    from handlers.notifications import send_pending_level_ups
+    from handlers.notifications import send_pending_level_ups, send_pending_task_notifications
 
     scheduler = AsyncIOScheduler()
 
@@ -38,8 +38,17 @@ def setup_scheduler(bot) -> AsyncIOScheduler:
         replace_existing=True,
     )
 
+    # Poll for pending task assignment notifications every 60 seconds
+    scheduler.add_job(
+        send_pending_task_notifications,
+        trigger=IntervalTrigger(seconds=60),
+        args=[bot],
+        id="task_notifications",
+        replace_existing=True,
+    )
+
     logger.info(
-        "Scheduled daily summary at %02d:%02d + level-up polling every 60s",
+        "Scheduled daily summary at %02d:%02d + level-up + task notification polling every 60s",
         DAILY_HOUR, DAILY_MINUTE,
     )
     return scheduler

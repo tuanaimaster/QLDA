@@ -3179,28 +3179,30 @@
     if (isAdmin()) {
       // Admin có thể giao việc cho tất cả
       assignableStaff = allStaff;
-    } else if (isManager()) {
-      // Quản lý có thể giao việc cho tất cả trừ Admin
+    } else if (isManager() || isTeamLeader()) {
+      // Quản lý / Trưởng nhóm có thể giao việc cho tất cả trừ Admin
       assignableStaff = allStaff.filter((staff) => {
         const role = (staff[COL.S_ROLE] || '').toLowerCase();
         return !role.includes('admin');
       });
     } else {
-      // Kiểm tra xem nhân viên có phụ trách dự án nào không
-      const isProjectManager = allProjects.some(
-        (project) => project[COL.P_MANAGER] === currentUser.name
-      );
-
-      if (isProjectManager) {
-        // Nhân viên phụ trách dự án có thể giao việc cho tất cả trừ Admin
-        assignableStaff = allStaff.filter((staff) => {
-          const role = (staff[COL.S_ROLE] || '').toLowerCase();
-          return !role.includes('admin');
+      // Nhân viên: giao việc cho tất cả thành viên trong cùng dự án
+      // (manager + participants + assignees có task trong dự án)
+      // Dự án được xác định từ select[name="projectId"] hoặc dùng tất cả dự án hiện thị
+      const memberNames = new Set();
+      const visibleProjects = allProjects;
+      visibleProjects.forEach(function(proj) {
+        if (proj[COL.P_MANAGER]) memberNames.add(proj[COL.P_MANAGER]);
+        String(proj[COL.P_PARTICIPANTS] || '').split(',').forEach(function(s) {
+          s = s.trim(); if (s) memberNames.add(s);
         });
-      } else {
-        // Người dùng thường chỉ có thể giao việc cho chính mình
-        assignableStaff = allStaff.filter((staff) => staff[COL.S_NAME] === currentUser.name);
-      }
+        allTasks.forEach(function(t) {
+          if (t[COL.T_PID] === proj[COL.P_ID] && t[COL.T_ASSIGNEE]) memberNames.add(t[COL.T_ASSIGNEE]);
+        });
+      });
+      assignableStaff = allStaff.filter(function(staff) {
+        return memberNames.has(staff[COL.S_NAME]);
+      });
     }
 
     // Kiểm tra xem có phải task được giao cho user hiện tại không
@@ -4175,29 +4177,8 @@
   }
 
   function canUserCreateTask() {
-    if (isAdmin() || isManager() || isTeamLeader()) {
-      return true;
-    }
-
-    // User thường có thể tạo task nếu họ là người được phụ trách dự án hoặc đã có task
-    if (currentUser) {
-      // Kiểm tra xem user có phải là người phụ trách dự án nào không
-      const userManagedProjects = allProjects.filter(
-        (project) => project[COL.P_MANAGER] === currentUser.name
-      );
-
-      if (userManagedProjects.length > 0) {
-        return true;
-      }
-
-      // Hoặc kiểm tra nếu user đã có nhiệm vụ trong hệ thống
-      if (allTasks) {
-        const userTasks = allTasks.filter((task) => task[COL.T_ASSIGNEE] === currentUser.name);
-        return userTasks.length > 0;
-      }
-    }
-
-    return false;
+    // Mọi người dùng đã đăng nhập đều có thể tạo nhiệm vụ
+    return isAuthenticated && !!currentUser;
   }
 
   function createNotificationModal(isEdit, data) {

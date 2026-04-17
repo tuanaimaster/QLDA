@@ -4,6 +4,7 @@ handlers/tasks.py — /mytasks, /donetask, /assign, /addtask (ConversationHandle
 from __future__ import annotations
 
 import logging
+import random
 from datetime import date
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -267,6 +268,7 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     context.user_data["add_task"] = {}
+    context.user_data["staff_name"] = staff_name  # dùng trong add_confirm để so sánh creator
     buttons = [[InlineKeyboardButton(f"{p['id']} — {p['name']}", callback_data=f"ap:{p['id']}")]
                for p in projects]
     buttons.append([InlineKeyboardButton("❌ Hủy", callback_data="ap:cancel")])
@@ -368,10 +370,19 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     db = SheetsDB.get()
     result = db.create_task(td["project_id"], task_data)
     if result.get("success"):
+        task_id = result['taskId']
         await query.edit_message_text(
-            f"✅ Đã tạo nhiệm vụ <code>{result['taskId']}</code>: <b>{task_data[T_NAME]}</b>",
+            f"✅ Đã tạo nhiệm vụ <code>{task_id}</code>: <b>{task_data[T_NAME]}</b>",
             parse_mode=ParseMode.HTML,
         )
+        # Thông báo cho người được giao (nếu khác người tạo)
+        assignee_name = task_data.get(T_ASSIGNEE, "").strip()
+        creator_name = context.user_data.get("staff_name", "")
+        if assignee_name and assignee_name != creator_name:
+            await _notify_task_assignee(
+                context.bot, db, assignee_name, task_id, task_data[T_NAME],
+                td.get("project_id", ""), creator_name
+            )
     else:
         await query.edit_message_text(f"❌ {result.get('error', 'Lỗi tạo nhiệm vụ')}")
     return ConversationHandler.END
@@ -380,6 +391,61 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def add_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.effective_message.reply_text("❌ Đã hủy thêm nhiệm vụ.")
     return ConversationHandler.END
+
+
+_MOTIVATIONAL_TIPS = [
+    "💡 Gợi ý: Chia nhỏ nhiệm vụ thành các bước hành động cụ thể để dễ hoàn thành hơn!",
+    "🔥 Mẹo: Dùng kỹ thuật Pomodoro — làm việc 25 phút rồi nghỉ 5 phút để giữ năng suất.",
+    "🚀 Gợi ý: Xác định kết quả đầu ra rõ ràng trước khi bắt đầu để tránh phải làm lại.",
+    "🎯 Mẹo: Hoàn thành phần khó nhất trước — sau đó mọi thứ sẽ trở nên dễ dàng hơn!",
+    "📈 Gợi ý: Cập nhật tiến độ thường xuyên để nhóm luôn đồng bộ với nhau.",
+    "🤝 Gợi ý: Nếu gặp khó khăn, đừng ngại nhờ đồng nghiệp hỗ trợ — teamwork là sức mạnh!",
+    "⭐ Mẹo: Ghi lại kết quả ngay khi hoàn thành để không bỏ sót bất kỳ thành tích nào.",
+    "💪 Mẹo: Mỗi nhiệm vụ hoàn thành là một bước tiến trên bảng xếp hạng — hãy phấn đấu lên top!",
+    "🧠 Gợi ý: Đọc lại mô tả nhiệm vụ kỹ trước khi bắt đầu để hiểu đúng yêu cầu.",
+    "🌟 Gợi ý: Đặt deadline cá nhân sớm hơn deadline thật 1–2 ngày để luôn đúng hẹn.",
+]
+
+
+async def _notify_task_assignee(bot, db, assignee_name: str, task_id: str,
+                                 task_name: str, project_id: str, creator_name: str) -> None:
+    """Gửi thông báo Telegram cho người được giao nhiệm vụ."""
+    try:
+        tg_id = db.get_telegram_user_by_name(assignee_name)
+        if not tg_id:
+            return
+        tip = random.choice(_MOTIVATIONAL_TIPS)
+        # Lookup project name
+        project_name = project_id
+        try:
+            for proj in db.get_all_projects():
+                if proj.get("id") == project_id:
+                    project_name = proj.get("name", project_id)
+                    break
+        except Exception:
+            pass
+
+        lines = [
+            "📬 <b>BẠN CÓ NHIỆM VỤ MỚI ĐƯỢC GIAO!</b>",
+            "",
+            f"📋 Nhiệm vụ: <b>{task_name}</b>",
+            f"🆔 Mã: <code>{task_id}</code>",
+            f"📁 Dự án: {project_name}",
+        ]
+        if creator_name:
+            lines.append(f"👤 Người giao: <b>{creator_name}</b>")
+        lines += [
+            "",
+            "⭐ <b>+10 XP</b> được cộng vào tài khoản của bạn!",
+            "",
+            tip,
+            "",
+            "Dùng /mytasks để xem danh sách nhiệm vụ của bạn.",
+        ]
+        await bot.send_message(chat_id=tg_id, text="\n".join(lines), parse_mode="HTML")
+        logger.info("Task notif sent via bot → %s (%s)", assignee_name, tg_id)
+    except Exception as exc:
+        logger.error("_notify_task_assignee error: %s", exc)
 
 
 def register(app) -> None:
