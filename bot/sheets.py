@@ -25,6 +25,42 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# ── XP constants (mirror js.html) ─────────────────────────────────────────────
+_TASK_XP: dict[str, int] = {
+    "Thấp": 10, "Trung bình": 20, "Cao": 40, "Khẩn cấp": 80,
+}
+_TASK_XP_DEFAULT = 20
+_CREATE_TASK_XP = 10
+_ASSIGN_ASSIGNER_XP = 20
+_ASSIGN_COMPLETER_XP = 10
+_T_CREATOR = "Người tạo"        # column name in task JSON
+_LEVELS: list[tuple[int, int, str, str]] = [   # (level, minXP, name, icon)
+    (1, 0,     "Thực tập",          "🌱"),
+    (2, 150,   "Nhân viên",         "📚"),
+    (3, 400,   "Chuyên viên",       "💼"),
+    (4, 800,   "Senior",            "⚡"),
+    (5, 1400,  "Team Leader",       "🔥"),
+    (6, 2200,  "Coordinator",       "💎"),
+    (7, 3200,  "Project Leader",    "🎯"),
+    (8, 4500,  "Project Manager",   "🏆"),
+    (9, 6000,  "Senior PM",         "🌟"),
+    (10, 8000, "Program Manager",   "👑"),
+    (11, 11000,"Portfolio Manager", "🚀"),
+    (12, 15000,"Director",          "⭐"),
+    (13, 20000,"Head",              "🏅"),
+]
+
+def _get_level(xp: int) -> tuple[int, str, str]:
+    """Return (level, name, icon) for given XP."""
+    result = _LEVELS[0]
+    for lvl in _LEVELS:
+        if xp >= lvl[1]:
+            result = lvl
+        else:
+            break
+    return result[0], result[2], result[3]
+
+
 SCOPES = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
@@ -257,34 +293,133 @@ class SheetsDB:
     # ------------------------------------------------------------------
     # Achievements
     # ------------------------------------------------------------------
-    def get_achievements_for_staff(self, staff_name: str) -> list[dict]:
-        try:
-            records = self._ws(SHEET_ACHIEVEMENTS).get_all_records()
-        except Exception:
-            return []
-        return [r for r in records if str(r.get(COL_ACH_STAFF, "")).strip() == staff_name.strip()]
+    # XP & Achievements — computed dynamically from task data (mirrors js.html)
+    # ------------------------------------------------------------------
+    def _compute_xp_stats(self, staff_name: str) -> dict:
+        """Compute XP, level, and task stats for a staff member from task data."""
+        all_tasks = self.get_all_tasks()
+        completed = [
+            t for t in all_tasks
+            if "hoàn thành" in str(t.get(T_STATUS, "")).lower()
+            and str(t.get(T_ASSIGNEE, "")).strip() == staff_name.strip()
+        ]
 
-    def get_total_points(self, staff_name: str) -> int:
-        return sum(int(r.get(COL_ACH_POINTS, 0) or 0)
-                   for r in self.get_achievements_for_staff(staff_name))
+        xp = 0
+        on_time = 0
+        per_day: dict[str, dict] = {}
+
+        for t in completed:
+            priority = str(t.get(T_PRIORITY, "")).strip()
+            base = _TASK_XP.get(priority, _TASK_XP_DEFAULT)
+
+            # Timing multiplier
+            due_str = str(t.get(T_DUE, "") or "")
+            done_str = str(t.get(T_REPORT_DATE, "") or "")
+            if due_str and done_str:
+                try:
+                    due_d = datetime.fromisoformat(due_str[:10])
+                    done_d = datetime.fromisoformat(done_str[:10])
+                    diff = (due_d - done_d).days
+                    if diff >= 1:
+                        base = round(base * 1.5)
+                    elif done_d <= due_d:
+                        base = round(base * 1.2)
+                        on_time += 1
+                    else:
+                        base = round(base * 0.7)
+                except Exception:
+                    pass
+
+            xp += base
+
+            # Completer bonus: +10 if task created by someone else
+            creator = str(t.get(_T_CREATOR, "") or "").strip()
+            if creator and creator != staff_name:
+                xp += _ASSIGN_COMPLETER_XP
+
+            # Combo tracking by day
+            day = done_str[:10]
+            if day:
+                if day not in per_day:
+                    per_day[day] = {"count": 0, "base_xp": 0}
+                per_day[day]["count"] += 1
+                per_day[day]["base_xp"] += base
+
+        # Combo bonus
+        for day_info in per_day.values():
+            c = day_info["count"]
+            mult = 2.0 if c >= 10 else 1.5 if c >= 5 else 1.2 if c >= 3 else 1.0
+            if mult > 1.0:
+                xp += round(day_info["base_xp"] * (mult - 1))
+
+        # Create task XP (+10 per task created)
+        created = [t for t in all_tasks if str(t.get(_T_CREATOR, "") or "").strip() == staff_name.strip()]
+        xp += len(created) * _CREATE_TASK_XP
+
+        # Assigner XP (+20 per assigned-to-others task that was completed)
+        assigner_done = [
+            t for t in all_tasks
+            if str(t.get(_T_CREATOR, "") or "").strip() == staff_name.strip()
+            and str(t.get(T_ASSIGNEE, "")).strip() != staff_name.strip()
+            and "hoàn thành" in str(t.get(T_STATUS, "")).lower()
+        ]
+        xp += len(assigner_done) * _ASSIGN_ASSIGNER_XP
+
+        level, level_name, level_icon = _get_level(xp)
+        on_time_rate = round(on_time / len(completed) * 100) if completed else 0
+
+        return {
+            "xp": xp,
+            "level": level,
+            "level_name": level_name,
+            "level_icon": level_icon,
+            "completed": len(completed),
+            "created": len(created),
+            "on_time_rate": on_time_rate,
+        }
+
+    def get_achievements_for_staff(self, staff_id: str) -> list[dict]:
+        """Return task-based achievements (computed from task data)."""
+        staff = self.get_staff_by_id(staff_id)
+        if not staff:
+            return []
+        staff_name = str(staff.get(COL_STAFF_NAME, "")).strip()
+        stats = self._compute_xp_stats(staff_name)
+        if stats["completed"] == 0:
+            return []
+        return [{
+            "Tên thành tích": f"✅ {stats['completed']} nhiệm vụ hoàn thành",
+            "Điểm": stats["xp"],
+            "Mô tả": f"Lv.{stats['level']} {stats['level_icon']} {stats['level_name']} — Đúng hạn: {stats['on_time_rate']}%",
+            "Ngày đạt": "",
+            "Loại": "COMPUTED",
+        }]
+
+    def get_total_points(self, staff_id: str) -> int:
+        """Return computed XP for a staff member."""
+        staff = self.get_staff_by_id(staff_id)
+        if not staff:
+            return 0
+        staff_name = str(staff.get(COL_STAFF_NAME, "")).strip()
+        return self._compute_xp_stats(staff_name)["xp"]
 
     def get_leaderboard(self, top_n: int = 10) -> list[dict]:
-        try:
-            records = self._ws(SHEET_ACHIEVEMENTS).get_all_records()
-        except Exception:
-            return []
-        totals: dict[str, int] = {}
-        for r in records:
-            name = str(r.get(COL_ACH_STAFF, "")).strip()
-            if name:
-                totals[name] = totals.get(name, 0) + int(r.get(COL_ACH_POINTS, 0) or 0)
-        leaderboard = sorted(totals.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        """Compute leaderboard from task data for all staff."""
+        all_staff = self.get_all_staff()
         result = []
-        for sid, pts in leaderboard:
-            s = self.get_staff_by_id(sid)
-            display = s.get(COL_STAFF_NAME, sid) if s else sid
-            result.append({"name": display, "points": pts})
-        return result
+        for s in all_staff:
+            name = str(s.get(COL_STAFF_NAME, "")).strip()
+            if not name:
+                continue
+            stats = self._compute_xp_stats(name)
+            result.append({
+                "name": name,
+                "points": stats["xp"],
+                "level": stats["level"],
+                "level_icon": stats["level_icon"],
+            })
+        result.sort(key=lambda x: x["points"], reverse=True)
+        return result[:top_n]
 
     # ------------------------------------------------------------------
     # Report summary

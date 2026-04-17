@@ -45,16 +45,13 @@ async def cmd_achievements(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    lines = [f"🏆 <b>Thành tích của {staff_display}</b>\n⭐ Tổng điểm: <b>{total}</b>\n"]
-    for ach in achievements[-10:]:  # latest 10
-        ach_type = str(ach.get("Loại", ""))
-        icon = BADGE_ICONS.get(ach_type, "🏅")
-        lines.append(
-            f"{icon} <b>{ach.get('Tên thành tích', '')}</b> (+{ach.get('Điểm', 0)} điểm)\n"
-            f"   {ach.get('Mô tả', '')} — <i>{ach.get('Ngày đạt', '')}</i>"
-        )
-
-    await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+    ach = achievements[0]  # single computed entry
+    text = (
+        f"🏆 <b>Thành tích của {staff_display}</b>\n"
+        f"⭐ <b>{total} XP</b> — {ach.get('Mô tả', '')}\n\n"
+        f"{ach.get('Tên thành tích', '')}"
+    )
+    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
 async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -69,7 +66,8 @@ async def cmd_leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     lines = ["🏆 <b>Bảng xếp hạng thành tích</b>\n"]
     for i, entry in enumerate(board):
         medal = medals[i] if i < len(medals) else "🏅"
-        lines.append(f"{medal} {entry['name']} — <b>{entry['points']}</b> điểm")
+        level_icon = entry.get("level_icon", "")
+        lines.append(f"{medal} {entry['name']} — <b>{entry['points']} XP</b> Lv.{entry.get('level',1)}{level_icon}")
 
     await update.effective_message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
