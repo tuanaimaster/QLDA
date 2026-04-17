@@ -880,8 +880,11 @@ function checkUserPermission(action, resourceType, resourceData = null) {
           }
         }
 
-        // Users can only update their own tasks
-        if (resourceData && resourceData[TASK_ASSIGNEE_COLUMN_NAME] === currentUser.name) {
+        // Users can only update their own tasks or tasks they created
+        if (resourceData && (
+          resourceData[TASK_ASSIGNEE_COLUMN_NAME] === currentUser.name ||
+          resourceData[TASK_CREATED_BY_COLUMN_NAME] === currentUser.name
+        )) {
           return { success: true };
         }
         return {
@@ -1693,6 +1696,8 @@ function addStaff(staffData) {
       : '';
     newRow[headers.indexOf(STAFF_ROLE_COLUMN_NAME)] = staffData.role || 'Nhân viên';
     newRow[headers.indexOf(STAFF_PASSWORD_COLUMN_NAME)] = staffData.password || '';
+    const deptIdx = headers.indexOf(STAFF_DEPARTMENT_COLUMN_NAME);
+    if (deptIdx !== -1) newRow[deptIdx] = staffData.department ? String(staffData.department).trim() : '';
 
     staffSheet.appendRow(newRow);
     SpreadsheetApp.flush();
@@ -1739,8 +1744,9 @@ function updateStaff(staffId, staffData) {
       [headers.indexOf(STAFF_NAME_COLUMN_NAME), staffData.name],
       [headers.indexOf(STAFF_EMAIL_COLUMN_NAME), staffData.email],
       [headers.indexOf(STAFF_POSITION_COLUMN_NAME), staffData.position],
-      [headers.indexOf(STAFF_ROLE_COLUMN_NAME), staffData.role], // Thêm dòng này
-      [headers.indexOf(STAFF_PASSWORD_COLUMN_NAME), staffData.password], // Thêm dòng này
+      [headers.indexOf(STAFF_ROLE_COLUMN_NAME), staffData.role],
+      [headers.indexOf(STAFF_PASSWORD_COLUMN_NAME), staffData.password],
+      [headers.indexOf(STAFF_DEPARTMENT_COLUMN_NAME), staffData.department],
     ];
 
     updates.forEach(([index, newValue]) => {
