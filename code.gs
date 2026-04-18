@@ -50,6 +50,14 @@ const STAFF_BIRTHDAY_COLUMN_NAME = 'Ngày sinh';
 const STAFF_DEPARTMENT_COLUMN_NAME = 'Phòng ban';
 const STAFF_BIO_COLUMN_NAME = 'Giới thiệu';
 const STAFF_AVATAR_COLUMN_NAME = 'Avatar';
+// === Coin economy columns (added to staff sheet) ===
+const STAFF_COIN_COLUMN_NAME          = 'Coin';
+const STAFF_BOOST_EXPIRES_COLUMN_NAME = 'BoostExpires';
+const STAFF_STREAK_FREEZE_COLUMN_NAME = 'StreakFreeze';
+const STAFF_LAST_DAILY_COLUMN_NAME    = 'LastDailyReward';
+const STAFF_LAST_STREAK_COLUMN_NAME   = 'LastStreakReward';
+const STAFF_LAST_LEVEL_COLUMN_NAME    = 'LastRewardedLevel';
+const COIN_LOG_SHEET_NAME             = 'CoinLog';
 
 // === Cột sheet "Nhật ký hoạt động" ===
 const LOG_TIMESTAMP_COLUMN_NAME = 'Thời gian';
@@ -107,7 +115,7 @@ function getInitialDataFast() {
     // Batch get tất cả sheets cùng lúc
     const ranges = [
       `'${PROJECT_SHEET_NAME}'!A:I`, // Projects với tất cả columns
-      `'${STAFF_SHEET_NAME}'!A:F`, // Staff
+      `'${STAFF_SHEET_NAME}'!A:P`, // Staff (includes coin columns)
     ];
 
     const response = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {
@@ -229,6 +237,9 @@ function authenticateUser(email, password) {
           department: row[headers.indexOf(STAFF_DEPARTMENT_COLUMN_NAME)] || '',
           bio: row[headers.indexOf(STAFF_BIO_COLUMN_NAME)] || '',
           avatar: row[headers.indexOf(STAFF_AVATAR_COLUMN_NAME)] || '',
+          coin: Number(row[headers.indexOf(STAFF_COIN_COLUMN_NAME)]) || 0,
+          boostExpires: row[headers.indexOf(STAFF_BOOST_EXPIRES_COLUMN_NAME)] ? String(row[headers.indexOf(STAFF_BOOST_EXPIRES_COLUMN_NAME)]) : '',
+          streakFreezeCount: Number(row[headers.indexOf(STAFF_STREAK_FREEZE_COLUMN_NAME)]) || 0,
         };
 
         // Store session
@@ -1840,6 +1851,267 @@ function getStaffList() {
     console.error('Error getting staff list:', e);
     return [];
   }
+}
+
+// ==================================
+// == COIN ECONOMY ==
+// ==================================
+
+/**
+ * Get or create the CoinLog sheet with headers.
+ */
+function getCoinLogSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(COIN_LOG_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(COIN_LOG_SHEET_NAME);
+    sheet.appendRow(['Time', 'User', 'Amount', 'Type', 'Source', 'BalanceAfter']);
+    sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
+  }
+  return sheet;
+}
+
+/**
+ * Get staff row index and headers for a given staff name.
+ * Returns { sheet, headers, rowIndex, row } or null.
+ */
+function _getStaffRow(name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(STAFF_SHEET_NAME);
+  if (!sheet) return null;
+  const headers = getHeaders(sheet);
+  const nameIdx = headers.indexOf(STAFF_NAME_COLUMN_NAME);
+  if (nameIdx === -1) return null;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  for (let i = 0; i < values.length; i++) {
+    if (String(values[i][nameIdx] || '').trim() === String(name || '').trim()) {
+      return { sheet, headers, rowIndex: i + 2, row: values[i] };
+    }
+  }
+  return null;
+}
+
+/**
+ * Ensure all coin-related columns exist in the staff sheet header row.
+ * Adds missing columns at the end.
+ */
+function _ensureCoinColumns() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(STAFF_SHEET_NAME);
+  if (!sheet) return;
+  const coinCols = [
+    STAFF_COIN_COLUMN_NAME, STAFF_BOOST_EXPIRES_COLUMN_NAME,
+    STAFF_STREAK_FREEZE_COLUMN_NAME, STAFF_LAST_DAILY_COLUMN_NAME,
+    STAFF_LAST_STREAK_COLUMN_NAME, STAFF_LAST_LEVEL_COLUMN_NAME,
+  ];
+  const headers = getHeaders(sheet);
+  let changed = false;
+  coinCols.forEach(function(col) {
+    if (headers.indexOf(col) === -1) {
+      headers.push(col);
+      sheet.getRange(1, headers.length).setValue(col);
+      changed = true;
+    }
+  });
+}
+
+/**
+ * Append a row to CoinLog.
+ */
+function _logCoin(name, amount, type, source, balanceAfter) {
+  try {
+    const logSheet = getCoinLogSheet();
+    logSheet.appendRow([
+      new Date(),
+      name,
+      amount,
+      type,
+      source || '',
+      balanceAfter,
+    ]);
+  } catch(e) { console.error('CoinLog error:', e); }
+}
+
+/**
+ * SERVER-SIDE reward logic — source of truth.
+ * Called by client after any significant action.
+ * stats: { level, streak, completedAll, completedToday, badgeMilestones:{id:lv,...} }
+ * Returns: { coin, gained, boostActive, streakFreezeCount, reasons:[] }
+ */
+function rewardCoin(staffName, stats) {
+  try {
+    _ensureCoinColumns();
+    const sr = _getStaffRow(staffName);
+    if (!sr) return { success: false, error: 'Không tìm thấy nhân viên' };
+
+    const { sheet, headers, rowIndex, row } = sr;
+    const get = function(colName) {
+      const idx = headers.indexOf(colName);
+      return idx !== -1 ? row[idx] : '';
+    };
+    const set = function(colName, val) {
+      const idx = headers.indexOf(colName);
+      if (idx !== -1) sheet.getRange(rowIndex, idx + 1).setValue(val);
+    };
+
+    const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    let coin        = Number(get(STAFF_COIN_COLUMN_NAME)) || 0;
+    const lastDaily = String(get(STAFF_LAST_DAILY_COLUMN_NAME) || '').slice(0, 10);
+    const lastStreak= Number(get(STAFF_LAST_STREAK_COLUMN_NAME)) || 0;
+    const lastLevel = Number(get(STAFF_LAST_LEVEL_COLUMN_NAME)) || 0;
+
+    const gained  = [];
+    let   total   = 0;
+
+    // ── 1. Level-up reward ────────────────────────────────────────
+    const newLevel = Number(stats.level) || 0;
+    if (newLevel > lastLevel && newLevel > 0) {
+      let reward = 0;
+      if (newLevel <= 3)  reward = 20;
+      else if (newLevel <= 5)  reward = 50;
+      else if (newLevel <= 7)  reward = 100;
+      else                     reward = 200;
+      total += reward;
+      gained.push({ type: 'LEVEL_UP', amount: reward, reason: 'Lên Level ' + newLevel });
+      _logCoin(staffName, reward, 'LEVEL_UP', 'level_' + newLevel, coin + total);
+      set(STAFF_LAST_LEVEL_COLUMN_NAME, newLevel);
+    }
+
+    // ── 2. Daily medal reward (anti-dup: once per calendar day) ──
+    if (lastDaily !== todayStr) {
+      const completed = Number(stats.completedToday) || 0;
+      let reward = 0;
+      if (completed >= 8)      reward = 40;
+      else if (completed >= 5) reward = 20;
+      else if (completed >= 3) reward = 10;
+      if (reward > 0) {
+        total += reward;
+        gained.push({ type: 'DAILY_MEDAL', amount: reward, reason: 'Hoàn thành ' + completed + ' việc hôm nay' });
+        _logCoin(staffName, reward, 'DAILY_MEDAL', 'daily_' + todayStr, coin + total);
+        set(STAFF_LAST_DAILY_COLUMN_NAME, todayStr);
+      }
+    }
+
+    // ── 3. Streak milestone reward (only when crossing new milestone) ─
+    const streak = Number(stats.streak) || 0;
+    const STREAK_MILESTONES = [3, 7, 14, 30];
+    let highestMilestone = 0;
+    STREAK_MILESTONES.forEach(function(m) { if (streak >= m) highestMilestone = m; });
+    if (highestMilestone > lastStreak) {
+      let reward = 0;
+      if (highestMilestone >= 30)      reward = 150;
+      else if (highestMilestone >= 14) reward = 70;
+      else if (highestMilestone >= 7)  reward = 30;
+      else if (highestMilestone >= 3)  reward = 10;
+      if (reward > 0) {
+        total += reward;
+        gained.push({ type: 'STREAK', amount: reward, reason: 'Chuỗi ' + highestMilestone + ' ngày!' });
+        _logCoin(staffName, reward, 'STREAK', 'streak_' + highestMilestone, coin + total);
+        set(STAFF_LAST_STREAK_COLUMN_NAME, highestMilestone);
+      }
+    }
+
+    // ── 4. Badge milestone rewards ────────────────────────────────
+    const BADGE_COIN = { 1: 20, 2: 40, 3: 80, 4: 150, 5: 300 };
+    const badgeMilestones = stats.badgeMilestones || {};
+    // We read previous badge milestones from a compact stored string or skip if not provided
+    // Simple approach: client sends delta (newly reached milestones only)
+    const newBadges = stats.newBadges || []; // [{id, level}]
+    newBadges.forEach(function(b) {
+      const reward = BADGE_COIN[b.level] || 0;
+      if (reward > 0) {
+        total += reward;
+        gained.push({ type: 'BADGE', amount: reward, reason: b.name + ' Lv.' + b.level });
+        _logCoin(staffName, reward, 'BADGE', b.id + '_lv' + b.level, coin + total);
+      }
+    });
+
+    // ── Write final balance ───────────────────────────────────────
+    if (total > 0) {
+      coin += total;
+      set(STAFF_COIN_COLUMN_NAME, coin);
+    }
+
+    const boostExpires = String(get(STAFF_BOOST_EXPIRES_COLUMN_NAME) || '');
+    const boostActive  = boostExpires && new Date(boostExpires) > new Date();
+    const streakFreezeCount = Number(get(STAFF_STREAK_FREEZE_COLUMN_NAME)) || 0;
+
+    return {
+      success:          true,
+      coin:             coin,
+      gained:           gained,
+      totalGained:      total,
+      boostActive:      !!boostActive,
+      boostExpires:     boostExpires,
+      streakFreezeCount: streakFreezeCount,
+    };
+  } catch(e) {
+    console.error('rewardCoin error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Spend coin — validate balance, deduct, log.
+ * type: 'XP_BOOST' | 'STREAK_FREEZE' | other
+ * Returns: { success, coin } or { success:false, error }
+ */
+function spendCoin(staffName, amount, type) {
+  try {
+    _ensureCoinColumns();
+    const sr = _getStaffRow(staffName);
+    if (!sr) return { success: false, error: 'Không tìm thấy nhân viên' };
+    const { sheet, headers, rowIndex, row } = sr;
+    const coinIdx = headers.indexOf(STAFF_COIN_COLUMN_NAME);
+    if (coinIdx === -1) return { success: false, error: 'Cột Coin chưa tồn tại' };
+    let coin = Number(row[coinIdx]) || 0;
+    if (coin < amount) return { success: false, error: 'Không đủ coin (có ' + coin + ', cần ' + amount + ')' };
+    coin -= amount;
+    sheet.getRange(rowIndex, coinIdx + 1).setValue(coin);
+    _logCoin(staffName, -amount, type, 'spend_' + type, coin);
+    return { success: true, coin: coin };
+  } catch(e) {
+    console.error('spendCoin error:', e);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Activate XP Boost (50 coin → x2 XP for 24h).
+ */
+function activateBoost(staffName) {
+  const result = spendCoin(staffName, 50, 'XP_BOOST');
+  if (!result.success) return result;
+  const sr = _getStaffRow(staffName);
+  if (!sr) return { success: false, error: 'Không tìm thấy nhân viên' };
+  const { sheet, headers, rowIndex } = sr;
+  const boostIdx = headers.indexOf(STAFF_BOOST_EXPIRES_COLUMN_NAME);
+  if (boostIdx !== -1) {
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    sheet.getRange(rowIndex, boostIdx + 1).setValue(expires.toISOString());
+    result.boostExpires = expires.toISOString();
+  }
+  return result;
+}
+
+/**
+ * Activate Streak Freeze (30 coin → +1 freeze charge).
+ */
+function activateStreakFreeze(staffName) {
+  const result = spendCoin(staffName, 30, 'STREAK_FREEZE');
+  if (!result.success) return result;
+  const sr = _getStaffRow(staffName);
+  if (!sr) return { success: false, error: 'Không tìm thấy nhân viên' };
+  const { sheet, headers, rowIndex, row } = sr;
+  const freezeIdx = headers.indexOf(STAFF_STREAK_FREEZE_COLUMN_NAME);
+  if (freezeIdx !== -1) {
+    const newCount = (Number(row[freezeIdx]) || 0) + 1;
+    sheet.getRange(rowIndex, freezeIdx + 1).setValue(newCount);
+    result.streakFreezeCount = newCount;
+  }
+  return result;
 }
 
 // ==================================

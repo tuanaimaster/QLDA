@@ -66,6 +66,10 @@
     S_PASSWORD: 'Mật khẩu',
     S_DEPT: 'Phòng ban',
     S_DEPT: 'Phòng ban',
+    // Coin economy columns
+    S_COIN:          'Coin',
+    S_BOOST_EXPIRES: 'BoostExpires',
+    S_STREAK_FREEZE: 'StreakFreeze',
     A_TIME: 'Thời gian',
     A_ACTION: 'Hành động',
     A_USER: 'Người thực hiện',
@@ -567,6 +571,10 @@
 
     // Refresh hero card if achievements tab is visible
     if (currentSection === 'achievements') renderMyProfileHero();
+
+    // ── Coin balance ─────────────────────────────────────────────────────────
+    var coinEl = document.getElementById('user-coin-balance');
+    if (coinEl) coinEl.textContent = (currentUser.coin != null ? currentUser.coin : '—');
   }
 
   // Daily quests definition & renderer
@@ -1308,9 +1316,14 @@
       .getElementById('change-password-btn')
       ?.addEventListener('click', showChangePasswordModal);
 
-    // Mobile menu
-    document.getElementById('mobile-menu-btn').addEventListener('click', toggleMobileMenu);
-    document.getElementById('mobile-overlay').addEventListener('click', closeMobileMenu);
+    // Sidebar toggle (desktop + mobile)
+    document.getElementById('mobile-menu-btn')?.addEventListener('click', toggleSidebar);
+    document.getElementById('mobile-overlay')?.addEventListener('click', function() {
+      if (window.innerWidth < 1024) closeSidebarMobile();
+    });
+
+    // Restore sidebar state from localStorage
+    _restoreSidebarState();
 
     // Authentication buttons
     document.getElementById('login-btn')?.addEventListener('click', showLoginModal);
@@ -1918,29 +1931,225 @@
       setTimeout(() => { renderAchievements(); }, 10);
     }
 
-    // Close mobile menu if open
-    closeMobileMenu();
+    // Close mobile menu if open (on mobile, close sidebar after navigation)
+    if (window.innerWidth < 1024) closeSidebarMobile();
   }
 
-  function toggleMobileMenu() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('mobile-overlay');
-
-    sidebar.classList.add('open');
-    overlay.classList.remove('hidden');
-    setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+  // ── Sidebar Toggle (Notion/Jira style) ──────────────────────────────────
+  function _restoreSidebarState() {
+    var saved = localStorage.getItem('qlda_sidebar');
+    // Mobile: always start closed
+    if (window.innerWidth < 1024) {
+      document.body.dataset.sidebar = 'closed';
+      return;
+    }
+    // Desktop: restore saved state, default open
+    document.body.dataset.sidebar = (saved === 'closed') ? 'closed' : 'open';
   }
 
-  function closeMobileMenu() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('mobile-overlay');
-
-    sidebar.classList.remove('open');
-    overlay.classList.add('opacity-0');
-    setTimeout(() => overlay.classList.add('hidden'), 300);
+  function toggleSidebar() {
+    var current = document.body.dataset.sidebar;
+    if (window.innerWidth < 1024) {
+      // Mobile: toggle overlay sidebar
+      if (current === 'open') {
+        closeSidebarMobile();
+      } else {
+        document.body.dataset.sidebar = 'open';
+        var overlay = document.getElementById('mobile-overlay');
+        if (overlay) { overlay.classList.remove('hidden'); setTimeout(function(){ overlay.classList.remove('opacity-0'); }, 10); }
+      }
+    } else {
+      // Desktop: toggle width collapse
+      var next = (current === 'open') ? 'closed' : 'open';
+      document.body.dataset.sidebar = next;
+      localStorage.setItem('qlda_sidebar', next);
+    }
   }
 
-  // === Data Rendering ===
+  function closeSidebarMobile() {
+    document.body.dataset.sidebar = 'closed';
+    var overlay = document.getElementById('mobile-overlay');
+    if (overlay) {
+      overlay.classList.add('opacity-0');
+      setTimeout(function(){ overlay.classList.add('hidden'); }, 300);
+    }
+  }
+
+  // Keep legacy names for any other callers
+  function toggleMobileMenu() { toggleSidebar(); }
+  function closeMobileMenu()  { closeSidebarMobile(); }
+
+  // ==================================
+  // == COIN ENGINE (CLIENT) ==
+  // ==================================
+
+  /**
+   * Build stats payload and call server rewardCoin.
+   * Throttled to once per 30s to avoid rapid-fire calls.
+   */
+  var _lastCoinRewardTs = 0;
+  function triggerCoinReward() {
+    if (!currentUser) return;
+    var now = Date.now();
+    if (now - _lastCoinRewardTs < 30000) return; // 30s cooldown
+    _lastCoinRewardTs = now;
+
+    var myName = currentUser.name || '';
+    var stats  = computeUserGameStats(myName);
+    var newBadges = _getNewlyReachedBadgeMilestones();
+
+    var payload = {
+      level:          stats.level ? stats.level.level : 0,
+      streak:         stats.streak || 0,
+      completedToday: stats.completedToday || 0,
+      newBadges:      newBadges,
+    };
+
+    google.script.run
+      .withSuccessHandler(function(result) { onCoinResult(result); })
+      .withFailureHandler(function(err) { console.warn('rewardCoin error:', err); })
+      .rewardCoin(myName, payload);
+  }
+
+  /**
+   * Track which badge milestones have already been rewarded (per session).
+   * Returns [{id, name, level}] of newly-reached milestones since last call.
+   */
+  var _rewardedBadgeMilestones = {};
+  function _getNewlyReachedBadgeMilestones() {
+    if (!currentUser || !allTasks.length) return [];
+    var myName = currentUser.name || '';
+    var result = [];
+    if (typeof BADGES === 'undefined' || typeof getBadgeProgressInfo === 'undefined') return result;
+    var stats  = computeUserGameStats(myName);
+    var stored = {};
+    BADGES.forEach(function(badge) {
+      try {
+        var info  = getBadgeProgressInfo(badge, stats, stored);
+        var level = info ? (info.currentLevel || 0) : 0;
+        if (level === 0) return;
+        var key = badge.id + '_' + level;
+        if (!_rewardedBadgeMilestones[key]) {
+          _rewardedBadgeMilestones[key] = true;
+          result.push({ id: badge.id, name: badge.name || badge.id, level: level });
+        }
+      } catch(e) { /* skip */ }
+    });
+    return result;
+  }
+
+  /**
+   * Handle server coin reward result — update currentUser.coin, show popup.
+   */
+  function onCoinResult(result) {
+    if (!result || !result.success) return;
+    // Update in-memory user coin balance
+    if (currentUser) currentUser.coin = result.coin;
+    // Update sidebar display
+    var coinEl = document.getElementById('user-coin-balance');
+    if (coinEl) coinEl.textContent = result.coin;
+    // Update boost indicator
+    if (result.boostActive) {
+      var boostEl = document.getElementById('boost-active-indicator');
+      if (boostEl) boostEl.classList.remove('hidden');
+    }
+    // Show popup for each reward gained
+    if (result.gained && result.gained.length > 0) {
+      var delay = 0;
+      result.gained.forEach(function(g) {
+        setTimeout(function() { showCoinPopup(g.amount, g.reason); }, delay);
+        delay += 600;
+      });
+    }
+  }
+
+  /**
+   * Show a brief coin reward popup near the top of the screen.
+   */
+  function showCoinPopup(amount, reason) {
+    var popup = document.createElement('div');
+    popup.className = 'coin-popup-toast';
+    popup.innerHTML = '<span class="coin-toast-icon">🪙</span> <strong>+' + amount + '</strong> ' + (reason || '');
+    document.body.appendChild(popup);
+    requestAnimationFrame(function() {
+      popup.classList.add('coin-popup-show');
+    });
+    setTimeout(function() {
+      popup.classList.remove('coin-popup-show');
+      setTimeout(function() { if (popup.parentNode) popup.parentNode.removeChild(popup); }, 400);
+    }, 3000);
+  }
+
+  /**
+   * Open coin shop modal.
+   */
+  function openCoinShop() {
+    var coin = (currentUser && currentUser.coin != null) ? currentUser.coin : 0;
+    var modal = document.getElementById('coin-shop-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'coin-shop-modal';
+      modal.className = 'coin-shop-overlay';
+      modal.innerHTML =
+        '<div class="coin-shop-modal">' +
+          '<div class="coin-shop-header">' +
+            '<span class="coin-shop-title">🏪 Cửa hàng Coin</span>' +
+            '<button onclick="closeCoinShop()" class="coin-shop-close">✕</button>' +
+          '</div>' +
+          '<div class="coin-shop-balance">Số dư: <strong>🪙 <span id="shop-coin-display">' + coin + '</span></strong></div>' +
+          '<div class="coin-shop-items">' +
+            '<div class="coin-shop-item">' +
+              '<div class="shop-item-icon">⚡</div>' +
+              '<div class="shop-item-info"><div class="shop-item-name">XP Boost x2</div><div class="shop-item-desc">Nhân đôi XP trong 24h</div></div>' +
+              '<button class="shop-buy-btn" onclick="buyShopItem(\'XP_BOOST\', 50, this)">50 🪙</button>' +
+            '</div>' +
+            '<div class="coin-shop-item">' +
+              '<div class="shop-item-icon">🛡️</div>' +
+              '<div class="shop-item-info"><div class="shop-item-name">Streak Freeze</div><div class="shop-item-desc">Bảo vệ chuỗi ngày 1 lần</div></div>' +
+              '<button class="shop-buy-btn" onclick="buyShopItem(\'STREAK_FREEZE\', 30, this)">30 🪙</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+      modal.addEventListener('click', function(e) { if (e.target === modal) closeCoinShop(); });
+    } else {
+      var dispEl = document.getElementById('shop-coin-display');
+      if (dispEl) dispEl.textContent = coin;
+    }
+    modal.classList.add('active');
+  }
+
+  function closeCoinShop() {
+    var modal = document.getElementById('coin-shop-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  function buyShopItem(type, cost, btn) {
+    if (!currentUser) return;
+    var coin = currentUser.coin != null ? currentUser.coin : 0;
+    if (coin < cost) { showToast('Không đủ coin!', 'error'); return; }
+    if (btn) btn.disabled = true;
+    var fn = type === 'XP_BOOST' ? 'activateBoost' : 'activateStreakFreeze';
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (btn) btn.disabled = false;
+        if (!result || !result.success) { showToast(result ? result.error : 'Lỗi', 'error'); return; }
+        currentUser.coin = result.coin;
+        if (type === 'XP_BOOST') currentUser.boostExpires = result.boostExpires;
+        if (type === 'STREAK_FREEZE') currentUser.streakFreezeCount = result.streakFreezeCount;
+        var coinEl = document.getElementById('user-coin-balance');
+        if (coinEl) coinEl.textContent = result.coin;
+        var dispEl = document.getElementById('shop-coin-display');
+        if (dispEl) dispEl.textContent = result.coin;
+        showToast(type === 'XP_BOOST' ? '⚡ XP Boost đã kích hoạt 24h!' : '🛡️ Streak Freeze đã thêm!', 'success');
+        closeCoinShop();
+      })
+      .withFailureHandler(function(err) {
+        if (btn) btn.disabled = false;
+        showToast('Lỗi: ' + (err || ''), 'error');
+      })
+      [fn](currentUser.name);
+  }
   function renderStats(stats) {
     // 1. TÍNH TOÁN LẠI TỪ DỮ LIỆU THỰC TẾ (allProjects, allTasks)
     const totalProjects = allProjects.length;
@@ -6009,7 +6218,7 @@
                   showConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
 
                   // Update sidebar XP bar (after brief delay to let allTasks update optimistically)
-                  setTimeout(function() { updateUserGameUI(); updateBadgeProgress(myName); }, 500);
+                  setTimeout(function() { updateUserGameUI(); updateBadgeProgress(myName); triggerCoinReward(); }, 500);
                   // ==========================================
 
                   // Auto roll-forward next recurring task due date

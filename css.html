@@ -4475,4 +4475,244 @@
     from { opacity: 0; transform: translateX(-50%) translateY(20px); }
     to   { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
+
+  /* ═══════════════════════════════════════════════════════════
+   * SIDEBAR TOGGLE + MAIN CONTENT LAYOUT (Notion/Jira style)
+   * ═══════════════════════════════════════════════════════════ */
+
+  /* ── Base sidebar ─────────────────────────────────────────── */
+  #sidebar {
+    width: 288px;   /* w-72 = 18rem = 288px */
+    min-width: 288px;
+    overflow: hidden;
+    transition: width 0.28s ease, min-width 0.28s ease;
+    flex-shrink: 0;
+  }
+
+  /* ── Collapsed state: width→0, layout space gone ─────────── */
+  body[data-sidebar="closed"] #sidebar {
+    width: 0;
+    min-width: 0;
+    border-right: none;
+  }
+
+  /* ── Main content: margin tracks sidebar ─────────────────── */
+  #main-content {
+    margin-left: 288px;
+    transition: margin-left 0.28s ease;
+  }
+  body[data-sidebar="closed"] #main-content {
+    margin-left: 0;
+  }
+
+  /* ── Sidebar toggle button ─────────────────────────────────── */
+  #sidebar-toggle-btn {
+    position: absolute;
+    top: 18px;
+    right: 14px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: rgba(99,102,241,0.10);
+    color: #6366f1;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: background 0.2s;
+    z-index: 10;
+  }
+  #sidebar-toggle-btn:hover { background: rgba(99,102,241,0.20); }
+
+  /* ── Mobile overlay (only on mobile) ──────────────────────── */
+  @media (max-width: 1023px) {
+    #sidebar {
+      position: fixed;
+      /* starts closed on mobile; JS sets data-sidebar="open" to slide in */
+    }
+    body[data-sidebar="open"] #sidebar {
+      width: 288px;
+      min-width: 288px;
+    }
+    body[data-sidebar="open"] #mobile-overlay {
+      display: block !important;
+      opacity: 1 !important;
+    }
+    #main-content {
+      margin-left: 0 !important;
+    }
+  }
+
+  /* ── Kanban scroll fix ─────────────────────────────────────── */
+  .kanban-wrapper,
+  #kanban-board-wrapper {
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 12px;
+  }
+  .kanban-board,
+  #kanban-board {
+    display: flex;
+    flex-direction: row;
+    min-width: max-content;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .kanban-column {
+    min-width: 280px;
+    width: 280px;
+    flex-shrink: 0;
+  }
+
+  /* ── Coin chip in sidebar ──────────────────────────────────────── */
+  .chip-coin {
+    background: linear-gradient(135deg, #fef9c3, #fde68a);
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border-radius: 12px;
+    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.7rem;
+  }
+  .chip-coin:hover {
+    transform: scale(1.08);
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.4);
+  }
+
+  /* ── Boost active indicator ────────────────────────────────────── */
+  #boost-active-indicator {
+    display: inline-block;
+    font-size: 0.65rem;
+    background: #fde68a;
+    color: #92400e;
+    border-radius: 8px;
+    padding: 1px 6px;
+    margin-left: 4px;
+    animation: boostPulse 2s infinite;
+  }
+  @keyframes boostPulse {
+    0%,100% { opacity:1; }
+    50%      { opacity:.6; }
+  }
+
+  /* ── Coin popup toast ──────────────────────────────────────────── */
+  .coin-popup-toast {
+    position: fixed;
+    top: 72px;
+    right: 20px;
+    z-index: 99999;
+    background: linear-gradient(135deg, #fef9c3, #fde68a);
+    border: 1.5px solid #f59e0b;
+    color: #78350f;
+    padding: 8px 16px;
+    border-radius: 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: 0 4px 16px rgba(245,158,11,0.25);
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .coin-popup-toast.coin-popup-show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .coin-toast-icon { font-size: 1.1rem; }
+
+  /* ── Coin shop modal ───────────────────────────────────────────── */
+  .coin-shop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .coin-shop-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .coin-shop-modal {
+    background: #fff;
+    border-radius: 20px;
+    width: min(420px, 92vw);
+    padding: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    transform: translateY(12px) scale(0.97);
+    transition: transform 0.25s ease;
+  }
+  .coin-shop-overlay.active .coin-shop-modal {
+    transform: translateY(0) scale(1);
+  }
+  .coin-shop-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .coin-shop-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
+  .coin-shop-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: #64748b;
+    line-height: 1;
+    padding: 4px;
+    border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .coin-shop-close:hover { background: #f1f5f9; }
+  .coin-shop-balance {
+    background: linear-gradient(135deg, #fef9c3, #fde68a);
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    color: #78350f;
+    margin-bottom: 16px;
+  }
+  .coin-shop-items { display: flex; flex-direction: column; gap: 12px; }
+  .coin-shop-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .coin-shop-item:hover { border-color: #f59e0b; box-shadow: 0 2px 12px rgba(245,158,11,0.12); }
+  .shop-item-icon { font-size: 1.6rem; flex-shrink: 0; }
+  .shop-item-info { flex: 1; }
+  .shop-item-name { font-size: 0.9rem; font-weight: 600; color: #1e293b; }
+  .shop-item-desc { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+  .shop-buy-btn {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 7px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    white-space: nowrap;
+  }
+  .shop-buy-btn:hover:not(:disabled) { opacity: 0.88; transform: scale(1.04); }
+  .shop-buy-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

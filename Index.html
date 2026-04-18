@@ -20,7 +20,7 @@
     <?!= include('css'); ?>
   </head>
 
-  <body class="theme-kim min-h-screen font-inter">
+  <body class="theme-kim min-h-screen font-inter" data-sidebar="open">
     <!-- Mobile Menu Overlay -->
     <div
       id="mobile-overlay"
@@ -30,7 +30,7 @@
     <!-- Sidebar -->
     <aside
       id="sidebar"
-      class="fixed left-0 top-0 h-full w-72 bg-white/80 backdrop-blur-xl border-r border-white/20 shadow-2xl z-50 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-out"
+      class="fixed left-0 top-0 h-full w-72 bg-white/80 backdrop-blur-xl border-r border-white/20 shadow-2xl z-50"
     >
       <div class="p-6 border-b border-gray-100/50">
         <div class="flex items-center space-x-3">
@@ -48,6 +48,10 @@
             <p class="text-xs text-gray-500">Quản lý thông minh</p>
           </div>
         </div>
+        <!-- Sidebar toggle button -->
+        <button id="sidebar-toggle-btn" title="Ẩn/hiện menu" onclick="toggleSidebar()">
+          <i class="fas fa-bars"></i>
+        </button>
 
         <!-- User info and login/logout buttons -->
         <div id="user-section" class="mt-4">
@@ -83,6 +87,9 @@
                   <div class="header-stat-chip chip-new"><span class="chip-icon">🆕</span><span id="chip-val-new" class="chip-val">0</span></div>
                   <div class="header-stat-chip chip-done"><span class="chip-icon">✔</span><span id="chip-val-done" class="chip-val">0</span></div>
                   <div class="header-stat-chip chip-streak" id="chip-wrap-streak"><span class="chip-icon">🔥</span><span id="chip-val-streak" class="chip-val">0</span></div>
+                  <button onclick="openCoinShop()" class="header-stat-chip chip-coin" title="Mở cửa hàng Coin">
+                    <span class="chip-icon">🪙</span><span id="user-coin-balance" class="chip-val">0</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -399,14 +406,14 @@
     </div>
 
     <!-- Main Content -->
-    <main class="md:ml-72 min-h-screen">
+    <main id="main-content" class="min-h-screen">
       <!-- Header -->
       <header class="sticky top-0 bg-white/80 backdrop-blur-xl border-b border-white/20 z-30">
         <div class="flex items-center justify-between px-6 py-4">
           <div class="flex items-center space-x-4">
             <button
               id="mobile-menu-btn"
-              class="md:hidden p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
+              class="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors duration-200"
             >
               <i class="fas fa-bars text-gray-600"></i>
             </button>
