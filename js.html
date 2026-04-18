@@ -555,38 +555,9 @@
       if (chipStreakWrap) chipStreakWrap.classList.toggle('chip-streak-active', stats.streak >= 1);
     }
 
-    // ── Layer 2: Top-3 badges mini row ──────────────────────────────────────
-    var badgeRow = document.getElementById('header-badge-row');
-    if (badgeRow && typeof BADGE_DEFS !== 'undefined' && typeof getBadgeLevel !== 'undefined') {
-      var _bs = {
-        completedAll: stats.completedAll, streak: stats.streak,
-        assignerCount: stats.assignerCount, onTimeRate: stats.onTimeRate,
-        managedProjects: stats.managedProjects,
-        assignedToOthersCount: stats.assignedToOthersCount,
-        totalDependentCount: stats.totalDependentCount || 0,
-      };
-      var _scored = BADGE_DEFS.map(function(b) {
-        var cur  = getBadgeLevel(b, _bs);
-        var nxtT = b.levels.find(function(l){ return l.lv === cur + 1; });
-        var val  = b.getValue(_bs);
-        var tgt  = nxtT ? nxtT.target : b.levels[b.levels.length - 1].target;
-        var pct  = Math.min(100, Math.round(val / tgt * 100));
-        return { b: b, cur: cur, val: val, tgt: tgt, pct: pct };
-      });
-      _scored.sort(function(a, b) { return (b.cur * 1000 + b.pct) - (a.cur * 1000 + a.pct); });
-      badgeRow.innerHTML = _scored.slice(0, 3).map(function(s) {
-        return '<div class="badge-mini-card">' +
-          '<span class="badge-mini-icon">' + s.b.icon + '</span>' +
-          '<div class="badge-mini-body">' +
-            '<div class="badge-mini-info">' +
-              '<span class="badge-mini-name">' + s.b.name + '</span>' +
-              '<span class="badge-mini-progress">' + s.val + '/' + s.tgt + '</span>' +
-            '</div>' +
-            '<div class="badge-mini-bar-wrap"><div class="badge-mini-bar-fill" style="width:' + s.pct + '%"></div></div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-    }
+    // ── Danh hiệu: update user-role to show level title ─────────────────────
+    var userRoleEl = document.getElementById('user-role');
+    if (userRoleEl) userRoleEl.textContent = lvl.name + ' ' + lvl.icon;
 
     // ── Streak reminder (once per session) ──────────────────────────────────
     if (!window._streakReminderShown) {
@@ -911,7 +882,9 @@
         .toUpperCase()
         .slice(0, 2);
       userName.textContent = user.name;
-      userRole.textContent = user.role;
+      // Hiển thị danh hiệu (level title) thay cho chức vụ
+      var _lvInfo = typeof getLevelInfo !== 'undefined' ? getLevelInfo(0) : null;
+      userRole.textContent = user.role; // sẽ được cập nhật lại bởi updateUserGameUI
 
       // Avatar: prefer local cache, then server URL, then initials
       const avatarSrc = user._avatarDataUrl || user.avatar;
