@@ -354,8 +354,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         from handlers import projects as _projects
         await _projects.cmd_projects(update, context)
     elif action == "addtask":
-        from handlers import tasks as _tasks
-        await _tasks.add_start(update, context)
+        pass  # Handled by ConversationHandler (group=0) via entry_points
     elif action == "daily":
         from handlers import daily as _daily
         await _daily.cmd_daily(update, context)

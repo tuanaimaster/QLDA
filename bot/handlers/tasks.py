@@ -377,21 +377,39 @@ async def add_got_project(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     await query.answer()
     data = query.data.split(":", 1)[1]
+    logger.info("add_got_project called: data=%s user=%s", data, update.effective_user.id)
     if data == "cancel":
         await query.edit_message_text("❌ Đã hủy thêm nhiệm vụ.")
         return ConversationHandler.END
 
-    context.user_data["add_task"]["project_id"] = data
+    try:
+        # Ensure add_task dict exists (safety guard for state loss)
+        if "add_task" not in context.user_data or not isinstance(context.user_data.get("add_task"), dict):
+            context.user_data["add_task"] = {}
+        context.user_data["add_task"]["project_id"] = data
 
-    db = SheetsDB.get()
-    all_projects = db.get_all_projects()
-    project = next((p for p in all_projects if p["id"] == data), None)
-    existing_tasks = project["tasks"] if project else []
-    active_tasks = [
-        t for t in existing_tasks
-        if (t.get(T_STATUS) or "").strip() != "Hoàn thành"
-    ]
-    context.user_data["add_task"]["_existing_tasks"] = active_tasks
+        db = SheetsDB.get()
+        all_projects = db.get_all_projects()
+        project = next((p for p in all_projects if p["id"] == data), None)
+        existing_tasks = project["tasks"] if project else []
+        active_tasks = [
+            t for t in existing_tasks
+            if (t.get(T_STATUS) or "").strip() != "Hoàn thành"
+        ]
+        context.user_data["add_task"]["_existing_tasks"] = active_tasks
+    except Exception as exc:
+        logger.error("add_got_project error: %s", exc, exc_info=True)
+        await query.edit_message_text(f"❌ Lỗi tải dữ liệu: {exc}\nThử lại với /addtask")
+        return ConversationHandler.END
+        active_tasks = [
+            t for t in existing_tasks
+            if (t.get(T_STATUS) or "").strip() != "Hoàn thành"
+        ]
+        context.user_data["add_task"]["_existing_tasks"] = active_tasks
+    except Exception as exc:
+        logger.error("add_got_project error: %s", exc, exc_info=True)
+        await query.edit_message_text(f"❌ Lỗi tải dữ liệu: {exc}\nThử lại với /addtask")
+        return ConversationHandler.END
 
     buttons = [
         [InlineKeyboardButton("✅ Có — Chọn nhiệm vụ cha", callback_data="asc:yes")],
@@ -707,7 +725,10 @@ def register(app) -> None:
     app.add_handler(CallbackQueryHandler(handle_task_move_callback, pattern=r"^tdone:"))
 
     add_conv = ConversationHandler(
-        entry_points=[CommandHandler("addtask", add_start)],
+        entry_points=[
+            CommandHandler("addtask", add_start),
+            MessageHandler(filters.Text(["➕ Thêm NV"]), add_start),
+        ],
         states={
             ADD_PROJECT:        [CallbackQueryHandler(add_got_project,        pattern=r"^ap:")],
             ADD_SUBTASK_CHOICE: [CallbackQueryHandler(add_got_subtask_choice, pattern=r"^asc:")],
