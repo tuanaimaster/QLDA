@@ -7014,12 +7014,50 @@
       output: task[COL.T_OUTPUT] || '',
       notes: task[COL.T_NOTES] || '',
     };
+    var isCompleting = (newStatus === 'Hoàn thành') && task[COL.T_STATUS] !== 'Hoàn thành';
+    var myName = currentUser ? (currentUser.name || '') : '';
+    var isMyTask = task[COL.T_ASSIGNEE] === myName;
+
+    // Nếu kéo sang Hoàn thành: set completion=100 và reportDate=hôm nay
+    if (isCompleting) {
+      updateData.completion = 100;
+      updateData.reportDate = formatDateToISOString(new Date());
+    }
+
     google.script.run
       .withSuccessHandler(function(resp) {
         if (resp && resp.success) {
           task[COL.T_STATUS] = newStatus;
+          if (isCompleting) task[COL.T_COMPLETION] = 100;
           renderKanban();
           showToast('Đã chuyển sang: ' + newStatus, 'success');
+
+          // === GAMIFICATION khi kéo sang Hoàn thành ===
+          if (isCompleting && isMyTask) {
+            var now = new Date();
+            var earnedXP = calculateXP(task, now);
+            var due = task[COL.T_DUE] ? new Date(task[COL.T_DUE]) : null;
+            var completedToday = allTasks.filter(function(t) {
+              return t[COL.T_ASSIGNEE] === myName
+                && (t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành')
+                && (t[COL.T_REPORT_DATE] || '').slice(0, 10) === now.toISOString().slice(0, 10);
+            }).length;
+            var comboMult = getComboMultiplier(completedToday);
+            addXP(myName, earnedXP, { comboMultiplier: comboMult, icon: '🎯' });
+
+            if (due && now > due) {
+              setTimeout(function() { showXPPopup(-Math.round(getTaskXP(task) * 0.3), { isBonus: true, icon: '🐢' }); }, 650);
+            }
+
+            var taskCreator = task[COL.T_CREATOR] || '';
+            if (taskCreator && taskCreator !== myName) {
+              setTimeout(function() { addXP(myName, ASSIGN_COMPLETE_COMPLETER_XP, { isBonus: true, icon: '🤝' }); }, 1200);
+            }
+
+            showConfetti(window.innerWidth / 2, window.innerHeight / 2);
+            setTimeout(function() { updateUserGameUI(); updateBadgeProgress(myName); triggerCoinReward(); }, 500);
+          }
+          // =============================================
         } else {
           showToast('Lỗi: ' + (resp ? resp.error : 'Không rõ'), 'error');
         }
