@@ -7432,14 +7432,6 @@
           '</div>' +
           tierTabsHTML +
           '<div class="gm-panel-body gm-road-body">' +
-            '<div class="gm-top3-list" style="grid-column:1/-1;">' +
-              top3.map(function(item) {
-                return '<div class="gm-top3-focus" data-badge-id="' + item.badge.id + '">' +
-                  '<div class="gm-top3-focus-name">' + item.badge.icon + ' ' + item.badge.name + '</div>' +
-                  '<div class="gm-top3-focus-meta">Lv' + item.info.displayLv + ' · ' + item.info.value + ' / ' + item.info.progressValue + '</div>' +
-                '</div>';
-              }).join('') +
-            '</div>' +
             groupsHTML +
           '</div>' +
         '</section>';
