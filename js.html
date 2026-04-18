@@ -7679,37 +7679,49 @@
 
       var xpGuide =
         '<section class="gm-panel gm-xp-guide" style="grid-column:1/-1;">' +
-          '<div class="gm-panel-head"><h3 class="gm-panel-title">📊 Bảng điểm XP</h3></div>' +
-          '<div class="gm-xp-grid">' +
-            _xpHead('🎯 XP theo độ khó nhiệm vụ') +
-            _xpRow('🟢', 'Dễ', '10 XP', '#059669') +
-            _xpRow('🔵', 'Trung bình', '20 XP', '#0284c7') +
-            _xpRow('🟠', 'Khó', '40 XP', '#ea580c') +
-            _xpRow('🔴', 'Rất khó', '80 XP', '#dc2626') +
-            _xpHead('⏱️ Hệ số thời gian') +
-            _xpRow('⚡', 'Trước hạn', '+50%', '#10b981') +
-            _xpRow('⏰', 'Đúng hạn', '+20%', '#0891b2') +
-            _xpRow('🐢', 'Trễ hạn', '-30%', '#ef4444') +
-            _xpHead('🔥 Combo & Phụ thuộc') +
-            _xpRow('🔥', 'Combo 3 / 5 / 10 NV', '×1.2 / ×1.5 / ×2', '#7c3aed') +
-            _xpRow('👥', 'Mỗi task phụ thuộc', '+10% (tối đa ×3)', '#0f766e') +
-            _xpHead('🌟 Chuỗi ngày (Streak)') +
-            _xpRow('🔥', '3 ngày liên tiếp', '+10%', '#f59e0b') +
-            _xpRow('🔥', '7 ngày liên tiếp', '+20%', '#ef4444') +
-            _xpRow('🔥', '30 ngày liên tiếp', '+50%', '#dc2626') +
-            _xpHead('📝 Hoạt động khác') +
-            _xpRow('📝', 'Tạo nhiệm vụ', '+15 XP', '#6366f1') +
-            _xpRow('💬', 'Bình luận (≤10/ngày)', '+3 XP', '#0891b2') +
-            _xpRow('🤝', 'Hoàn thành task được giao', '+30 XP bonus', '#7c3aed') +
-            _xpHead('🏅 Huy hiệu lên cấp') +
-            _xpRow('✅', 'Hoàn thành: lv1→lv5', '+20 → +400 XP', '#059669') +
-            _xpRow('🔥', 'Làm đều: lv1→lv5', '+15 → +300 XP', '#ef4444') +
-            _xpRow('🤲', 'Giao việc: lv1→lv5', '+20 → +340 XP', '#8b5cf6') +
-            _xpRow('⏰', 'Đúng hạn: lv1→lv5', '+20 → +320 XP', '#0891b2') +
-            _xpHead('🏅 Thưởng XGOLD') +
-            _xpRow('🏅', 'Hoàn thành nhiệm vụ', '+ XGOLD', '#d97706') +
-            _xpRow('🏅', 'Streak & Lên cấp', '+ XGOLD bonus', '#b45309') +
-            _xpRow('🏅', 'Dùng để mua: Boost XP / Streak Freeze', '50 / 30 🏅', '#92400e') +
+          '<div class="gm-panel-head"><h3 class="gm-panel-title">📊 Bảng điểm XP & XGOLD</h3></div>' +
+          '<div class="gm-xp-body">' +
+            '<div class="gm-xp-col">' +
+              _xpGroup('🎯 XP theo độ khó', [
+                _xpLine('🟢', 'Dễ', '10 XP', '#059669'),
+                _xpLine('🔵', 'Trung bình', '20 XP', '#0284c7'),
+                _xpLine('🟠', 'Khó', '40 XP', '#ea580c'),
+                _xpLine('🔴', 'Rất khó', '80 XP', '#dc2626'),
+              ]) +
+              _xpGroup('⏱️ Hệ số thời gian', [
+                _xpLine('⚡', 'Trước hạn', '+50%', '#10b981'),
+                _xpLine('⏰', 'Đúng hạn', '+20%', '#0891b2'),
+                _xpLine('🐢', 'Trễ hạn', '−30%', '#ef4444'),
+              ]) +
+              _xpGroup('🔥 Combo & Streak', [
+                _xpLine('🔥', 'Combo 3 NV', '×1.2', '#7c3aed'),
+                _xpLine('🔥', 'Combo 5 NV', '×1.5', '#7c3aed'),
+                _xpLine('🔥', 'Combo 10 NV', '×2.0', '#7c3aed'),
+                _xpLine('👥', 'Mỗi task phụ thuộc', '+10% (max ×3)', '#0f766e'),
+                _xpLine('🔥', '3 ngày streak', '+10%', '#f59e0b'),
+                _xpLine('🔥', '7 ngày streak', '+20%', '#ef4444'),
+                _xpLine('🔥', '30 ngày streak', '+50%', '#dc2626'),
+              ]) +
+            '</div>' +
+            '<div class="gm-xp-col">' +
+              _xpGroup('📝 Hoạt động khác', [
+                _xpLine('📝', 'Tạo nhiệm vụ', '+15 XP', '#6366f1'),
+                _xpLine('💬', 'Bình luận (≤10/ngày)', '+3 XP', '#0891b2'),
+                _xpLine('🤝', 'Nhận & hoàn thành task', '+30 XP', '#7c3aed'),
+              ]) +
+              _xpGroup('🏅 Huy hiệu lên cấp', [
+                _xpLine('✅', 'Hoàn thành Lv.1→Lv.5', '+20 → +400 XP', '#059669'),
+                _xpLine('🔥', 'Làm đều Lv.1→Lv.5', '+15 → +300 XP', '#ef4444'),
+                _xpLine('🤲', 'Giao việc Lv.1→Lv.5', '+20 → +340 XP', '#8b5cf6'),
+                _xpLine('⏰', 'Đúng hạn Lv.1→Lv.5', '+20 → +320 XP', '#0891b2'),
+              ]) +
+              _xpGroup('🏅 Thưởng XGOLD', [
+                _xpLine('🏅', 'Hoàn thành nhiệm vụ', 'XGOLD', '#d97706'),
+                _xpLine('🏅', 'Streak & Lên cấp', 'XGOLD bonus', '#b45309'),
+                _xpLine('⚡', 'Mua XP Boost', '50 🏅', '#92400e'),
+                _xpLine('🛡️', 'Mua Streak Freeze', '30 🏅', '#92400e'),
+              ]) +
+            '</div>' +
           '</div>' +
         '</section>';
 
@@ -7731,15 +7743,28 @@
   function _xpRow(icon, label, xp, color) {
     return '<div class="gm-xp-row">' +
       '<span class="gm-xp-icon">' + icon + '</span>' +
-      '<div class="gm-xp-meta">' +
-        '<div class="gm-xp-label">' + label + '</div>' +
-      '</div>' +
+      '<div class="gm-xp-meta"><div class="gm-xp-label">' + label + '</div></div>' +
       '<div class="gm-xp-value" style="color:' + color + ';">' + xp + '</div>' +
     '</div>';
   }
 
   function _xpHead(title) {
     return '<div class="gm-xp-section-head">' + title + '</div>';
+  }
+
+  function _xpLine(icon, label, value, color) {
+    return '<div class="gm-xp-line">' +
+      '<span class="gm-xp-line-icon">' + icon + '</span>' +
+      '<span class="gm-xp-line-label">' + label + '</span>' +
+      '<span class="gm-xp-line-val" style="color:' + color + ';">' + value + '</span>' +
+    '</div>';
+  }
+
+  function _xpGroup(title, rows) {
+    return '<div class="gm-xp-group">' +
+      '<div class="gm-xp-group-head">' + title + '</div>' +
+      rows.join('') +
+    '</div>';
   }
 
   // ── Badge mini-card for roadmap ───────────────────────────────────────────

@@ -4061,25 +4061,58 @@
     border: 1px solid #a7f3d0;
   }
 
-  .gm-xp-grid {
+  /* ── XP & XGOLD Scoreboard ─────────────────────────────────── */
+  .gm-xp-guide {
+    background: linear-gradient(135deg, #f0fdfa, #ecfeff);
+    border: 1px solid #a7f3d0;
+  }
+  /* Two-column layout */
+  .gm-xp-body {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 16px 20px 20px;
+  }
+  .gm-xp-col { display: flex; flex-direction: column; gap: 12px; }
+
+  /* Group card */
+  .gm-xp-group {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid #e0f2fe;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .gm-xp-group-head {
+    background: linear-gradient(90deg, #f0f9ff, #f0fdf4);
+    border-bottom: 1px solid #e0f2fe;
+    padding: 7px 12px;
+    font-size: 11px; font-weight: 800;
+    color: #0f172a; letter-spacing: 0.3px;
+  }
+
+  /* Row inside a group */
+  .gm-xp-line {
+    display: flex; align-items: center;
+    padding: 6px 12px;
     gap: 8px;
-    padding: 14px 20px;
+    border-bottom: 1px solid #f1f5f9;
   }
+  .gm-xp-line:last-child { border-bottom: none; }
+  .gm-xp-line-icon { font-size: 14px; flex-shrink: 0; width: 20px; text-align: center; }
+  .gm-xp-line-label { flex: 1; font-size: 11px; color: #374151; font-weight: 500; }
+  .gm-xp-line-val { font-size: 12px; font-weight: 800; white-space: nowrap; }
 
-  .gm-xp-row {
-    border-radius: 10px;
-    background: rgba(255,255,255,0.85);
-    border: 1px solid #d1fae5;
-    padding: 8px 10px;
-    display: flex; align-items: center; gap: 8px;
-  }
-
+  /* Legacy row + head still used in some places */
+  .gm-xp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 8px; padding: 14px 20px; }
+  .gm-xp-row { border-radius: 10px; background: rgba(255,255,255,0.85); border: 1px solid #d1fae5; padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
   .gm-xp-icon { font-size: 16px; }
   .gm-xp-meta { flex: 1; min-width: 0; }
   .gm-xp-label { font-size: 11px; font-weight: 700; color: #1e293b; }
   .gm-xp-value { font-size: 12px; font-weight: 900; }
+  .gm-xp-section-head { grid-column: 1/-1; font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; color: #6b7280; padding: 6px 4px 2px; border-bottom: 1px solid #e5e7eb; margin-top: 4px; }
+
+  @media (max-width: 700px) { .gm-xp-body { grid-template-columns: 1fr; } }
 
   .gm-error {
     background: #fff; border: 1px solid #fecaca;
@@ -4137,14 +4170,6 @@
   .gm-road-badge-mini-count { font-size: 9px; color: #6b7280; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gm-road-badge-mini-bar { height: 3px; background: #e5e7eb; border-radius: 2px; margin-top: 3px; overflow: hidden; }
   .gm-road-badge-mini-fill { height: 100%; background: var(--tc, #3b82f6); border-radius: 2px; transition: width 0.4s; }
-
-  /* ── XP guide section header ─── */
-  .gm-xp-section-head {
-    grid-column: 1 / -1;
-    font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;
-    color: #6b7280; padding: 6px 4px 2px; border-bottom: 1px solid #e5e7eb;
-    margin-top: 4px;
-  }
 
   /* Gate unlock requirement checklist */
   .gm-road-unlock-req { margin-top: 6px; padding: 7px 8px; background: rgba(255,255,255,0.75); border-radius: 7px; border: 1px dashed color-mix(in srgb, var(--tc) 30%, transparent); }
