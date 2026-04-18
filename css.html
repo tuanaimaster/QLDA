@@ -4546,7 +4546,7 @@
   }
 
   /* ── Kanban scroll fix ─────────────────────────────────────── */
-  /* Scroll context on SECTION; board is width:max-content inner content */
+  /* Scroll context = #kanban-section; board = flex content (width:max-content) */
   #kanban-section {
     overflow-x: auto;
     overflow-y: visible;
@@ -4569,7 +4569,9 @@
     overflow-x: visible !important;
     padding-bottom: 12px;
   }
-  .kanban-column {
+  /* .kanban-column = class set by renderKanban(); .kanban-col = legacy fallback */
+  .kanban-column,
+  .kanban-col {
     min-width: 300px;
     width: 300px;
     flex-shrink: 0;
