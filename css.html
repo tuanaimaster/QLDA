@@ -4545,38 +4545,38 @@
     }
   }
 
-  /* ── Kanban scroll fix ─────────────────────────────────────── */
-  /* Scroll context = #kanban-section; board = flex content (width:max-content) */
+
+  /* ── Kanban layout: fluid columns, horizontal scroll on narrow ── */
   #kanban-section {
     overflow-x: auto;
-    overflow-y: visible;
     width: 100%;
-  }
-  .kanban-wrapper,
-  #kanban-board-wrapper {
-    overflow-x: auto;
-    width: 100%;
-    padding-bottom: 12px;
   }
   .kanban-board,
   #kanban-board {
     display: flex !important;
     flex-direction: row !important;
-    min-width: max-content;
-    width: max-content;
+    width: 100%;
+    min-width: 0;
     gap: 16px;
     align-items: flex-start;
-    overflow-x: visible !important;
+    box-sizing: border-box;
     padding-bottom: 12px;
   }
-  /* .kanban-column = class set by renderKanban(); .kanban-col = legacy fallback */
+  /* Fluid equal columns: flex:1 so all 4 share available width evenly */
   .kanban-column,
   .kanban-col {
-    min-width: 300px;
-    width: 300px;
-    flex-shrink: 0;
+    flex: 1 1 0;
+    min-width: 260px;
+    width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
   }
-  /* Slim scrollbar */
+  /* Narrow screens: fixed width + parent scrolls */
+  @media (max-width: 900px) {
+    .kanban-board, #kanban-board { width: max-content; min-width: max-content; }
+    .kanban-column, .kanban-col  { flex: none; width: 260px !important; }
+  }
+  /* Slim horizontal scrollbar */
   #kanban-section::-webkit-scrollbar { height: 6px; }
   #kanban-section::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); border-radius: 3px; }
   #kanban-section::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 3px; }
