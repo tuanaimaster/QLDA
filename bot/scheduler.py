@@ -1,6 +1,7 @@
 """
 scheduler.py — APScheduler: daily summary + level-up notifications
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 def setup_scheduler(bot) -> AsyncIOScheduler:
     from handlers.daily import send_daily_summary
-    from handlers.notifications import send_pending_level_ups, send_pending_task_notifications
+    from handlers.notifications import (
+        send_pending_level_ups,
+        send_pending_task_notifications,
+    )
 
     scheduler = AsyncIOScheduler()
 
@@ -49,6 +53,7 @@ def setup_scheduler(bot) -> AsyncIOScheduler:
 
     logger.info(
         "Scheduled daily summary at %02d:%02d + level-up + task notification polling every 60s",
-        DAILY_HOUR, DAILY_MINUTE,
+        DAILY_HOUR,
+        DAILY_MINUTE,
     )
     return scheduler

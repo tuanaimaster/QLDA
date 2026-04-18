@@ -82,18 +82,18 @@
 
   const LEVELS = [
     { level:  1, name: 'Thực tập',          icon: '🌱', tier: 'execution',    minXP: 0,     role: 'Làm quen hệ thống, nhận task'        },
-    { level:  2, name: 'Nhân viên',         icon: '📚', tier: 'execution',    minXP: 150,   role: 'Thực hiện task theo yêu cầu'          },
-    { level:  3, name: 'Chuyên viên',       icon: '💼', tier: 'execution',    minXP: 400,   role: 'Làm task độc lập, ổn định'            },
-    { level:  4, name: 'Senior',            icon: '⚡', tier: 'execution',    minXP: 800,   role: 'Xử lý task phức tạp, làm đều'         },
-    { level:  5, name: 'Team Leader',       icon: '🔥', tier: 'coordination', minXP: 1400,  role: 'Giao task, hỗ trợ team'               },
-    { level:  6, name: 'Coordinator',       icon: '💎', tier: 'coordination', minXP: 2200,  role: 'Theo dõi tiến độ, điều phối'          },
-    { level:  7, name: 'Project Leader',    icon: '🎯', tier: 'coordination', minXP: 3200,  role: 'Quản lý nhóm nhỏ'                     },
-    { level:  8, name: 'Project Manager',   icon: '🏆', tier: 'management',   minXP: 4500,  role: 'Quản lý 1 dự án'                      },
-    { level:  9, name: 'Senior PM',         icon: '🌟', tier: 'management',   minXP: 6000,  role: 'Quản lý dự án lớn'                    },
-    { level: 10, name: 'Program Manager',   icon: '👑', tier: 'management',   minXP: 8000,  role: 'Quản lý nhiều dự án'                  },
-    { level: 11, name: 'Portfolio Manager', icon: '🚀', tier: 'leadership',   minXP: 11000, role: 'Quản lý danh mục dự án'               },
-    { level: 12, name: 'Director',          icon: '⭐', tier: 'leadership',   minXP: 15000, role: 'Quyết định chiến lược'                },
-    { level: 13, name: 'Head',              icon: '🏅', tier: 'leadership',   minXP: 20000, role: 'Lãnh đạo hệ thống'                    },
+    { level:  2, name: 'Nhân viên',         icon: '📚', tier: 'execution',    minXP: 250,   role: 'Thực hiện task theo yêu cầu'          },
+    { level:  3, name: 'Chuyên viên',       icon: '💼', tier: 'execution',    minXP: 650,   role: 'Làm task độc lập, ổn định'            },
+    { level:  4, name: 'Senior',            icon: '⚡', tier: 'execution',    minXP: 1250,  role: 'Xử lý task phức tạp, làm đều'         },
+    { level:  5, name: 'Team Leader',       icon: '🔥', tier: 'coordination', minXP: 2050,  role: 'Giao task, hỗ trợ team'               },
+    { level:  6, name: 'Coordinator',       icon: '💎', tier: 'coordination', minXP: 3100,  role: 'Theo dõi tiến độ, điều phối'          },
+    { level:  7, name: 'Project Leader',    icon: '🎯', tier: 'coordination', minXP: 4400,  role: 'Quản lý nhóm nhỏ'                     },
+    { level:  8, name: 'Project Manager',   icon: '🏆', tier: 'management',   minXP: 6000,  role: 'Quản lý 1 dự án'                      },
+    { level:  9, name: 'Senior PM',         icon: '🌟', tier: 'management',   minXP: 8000,  role: 'Quản lý dự án lớn'                    },
+    { level: 10, name: 'Program Manager',   icon: '👑', tier: 'management',   minXP: 10500, role: 'Quản lý nhiều dự án'                  },
+    { level: 11, name: 'Portfolio Manager', icon: '🚀', tier: 'leadership',   minXP: 13500, role: 'Quản lý danh mục dự án'               },
+    { level: 12, name: 'Director',          icon: '⭐', tier: 'leadership',   minXP: 17500, role: 'Quyết định chiến lược'                },
+    { level: 13, name: 'Head',              icon: '🏅', tier: 'leadership',   minXP: 22500, role: 'Lãnh đạo hệ thống'                    },
   ];
 
   const CAREER_TIERS = {
@@ -108,7 +108,6 @@
     execution:    ['hoan_thanh', 'lam_deu'],
     coordination: ['giao_viec',  'ho_tro'],
     management:   ['dung_han',   'quan_ly'],
-    leadership:   ['anh_huong',  'xuat_sac'],
   };
 
   // Hybrid level-gate requirements (hard: Lv5 & Lv8, visual: Lv11)
@@ -131,12 +130,18 @@
     'Thấp': 10, 'Trung bình': 20, 'Cao': 40, 'Khẩn cấp': 80,
     'default': 20
   };
-  const CREATE_TASK_XP = 10;
-  const ASSIGN_COMPLETE_ASSIGNER_XP = 20;
-  const ASSIGN_COMPLETE_COMPLETER_XP = 10;
-  const COMMENT_XP = 5;
+  const CREATE_TASK_XP = 15;
+  const ASSIGN_COMPLETE_ASSIGNER_XP = 50;
+  const ASSIGN_COMPLETE_COMPLETER_XP = 30;
+  const COMMENT_XP = 3;
   const COMMENT_XP_CAP_PER_DAY = 10;   // max comments/day counted for XP
   const COMMENT_XP_LIFETIME_CAP = 200; // max total comment XP contribution (from all comments)
+  const FIRST_TASK_DAILY_XP = 10;      // bonus for completing first task of the day
+  const STREAK_BONUSES = [             // sorted desc — first match wins
+    { days: 30, pct: 0.50 },
+    { days:  7, pct: 0.20 },
+    { days:  3, pct: 0.10 },
+  ];
 
   // Timing multipliers
   const EARLY_BONUS_MULT   = 1.5;  // +50% if done early
@@ -280,6 +285,9 @@
 
     xp += comboBonusXP;
 
+    // First task daily bonus
+    if (perDay[todayKey] && perDay[todayKey].count >= 1) xp += FIRST_TASK_DAILY_XP;
+
     // +10 XP cho mỗi task do mình tạo (CREATE_TASK_XP)
     var createdTasks = allTasks.filter(function(t) { return (t[COL.T_CREATOR] || '') === staffName; });
     xp += createdTasks.length * CREATE_TASK_XP;
@@ -364,6 +372,13 @@
     });
     xp = Math.round(xp * Math.min(boostMult, MAX_BADGE_BOOST_MULT));
 
+    // Streak bonus (applied after badge boost)
+    var streakBonusPct = 0;
+    for (var _si = 0; _si < STREAK_BONUSES.length; _si++) {
+      if (streak >= STREAK_BONUSES[_si].days) { streakBonusPct = STREAK_BONUSES[_si].pct; break; }
+    }
+    if (streakBonusPct > 0) xp = Math.round(xp * (1 + streakBonusPct));
+
     return {
       xp: xp,
       level: getLevelInfo(xp),
@@ -389,6 +404,8 @@
       todayCompletedCount: todayCompletedCount,
       commentCount: commentCounts.total || 0,
       badgeBoostMult: Math.min(boostMult, MAX_BADGE_BOOST_MULT),
+      streakBonusPct: streakBonusPct,
+      completionDaysArr: Object.keys(perDay),
     };
   }
 
@@ -397,13 +414,15 @@
     options = options || {};
     var xp = Math.round(Number(amount) || 0);
     var comboMultiplier = Number(options.comboMultiplier || 1);
+    var source = options.source || '';
     var icon = options.icon || (options.isBonus ? '⚡' : '🎉');
 
     var el = document.createElement('div');
     el.className = 'xp-popup' + (options.isBonus ? ' bonus' : '') + (comboMultiplier > 1 ? ' combo' : '');
-    var xpText = (xp >= 0 ? '+' : '') + xp;
+    var xpText = xp !== 0 ? ((xp >= 0 ? '+' : '') + xp + ' XP') : source;
     el.innerHTML =
-      '<span class="xp-popup-main">' + icon + ' ' + xpText + ' XP</span>' +
+      '<span class="xp-popup-main">' + icon + ' ' + xpText + '</span>' +
+      (source && xp !== 0 ? '<span class="xp-popup-source">' + source + '</span>' : '') +
       (comboMultiplier > 1 ? '<span class="xp-popup-combo">🔥 x' + comboMultiplier.toFixed(1).replace(/\.0$/, '') + '</span>' : '');
     document.body.appendChild(el);
     setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 2400);
@@ -524,6 +543,57 @@
     var xpNext = document.getElementById('user-xp-next');
     if (xpNext) xpNext.textContent = nextLvl ? ('→' + nextLvl.minXP + ' XP') : 'MAX';
 
+    // ── Layer 1: Daily behavior chips ───────────────────────────────────────
+    var chipNew    = document.getElementById('chip-val-new');
+    var chipDone   = document.getElementById('chip-val-done');
+    var chipStreak = document.getElementById('chip-val-streak');
+    if (chipNew)    chipNew.textContent    = stats.addedToday    || 0;
+    if (chipDone)   chipDone.textContent   = stats.completedToday || 0;
+    if (chipStreak) {
+      chipStreak.textContent = stats.streak || 0;
+      var chipStreakWrap = document.getElementById('chip-wrap-streak');
+      if (chipStreakWrap) chipStreakWrap.classList.toggle('chip-streak-active', stats.streak >= 1);
+    }
+
+    // ── Layer 2: Top-3 badges mini row ──────────────────────────────────────
+    var badgeRow = document.getElementById('header-badge-row');
+    if (badgeRow && typeof BADGE_DEFS !== 'undefined' && typeof getBadgeLevel !== 'undefined') {
+      var _bs = {
+        completedAll: stats.completedAll, streak: stats.streak,
+        assignerCount: stats.assignerCount, onTimeRate: stats.onTimeRate,
+        managedProjects: stats.managedProjects,
+        assignedToOthersCount: stats.assignedToOthersCount,
+        totalDependentCount: stats.totalDependentCount || 0,
+      };
+      var _scored = BADGE_DEFS.map(function(b) {
+        var cur  = getBadgeLevel(b, _bs);
+        var nxtT = b.levels.find(function(l){ return l.lv === cur + 1; });
+        var val  = b.getValue(_bs);
+        var tgt  = nxtT ? nxtT.target : b.levels[b.levels.length - 1].target;
+        var pct  = Math.min(100, Math.round(val / tgt * 100));
+        return { b: b, cur: cur, val: val, tgt: tgt, pct: pct };
+      });
+      _scored.sort(function(a, b) { return (b.cur * 1000 + b.pct) - (a.cur * 1000 + a.pct); });
+      badgeRow.innerHTML = _scored.slice(0, 3).map(function(s) {
+        return '<div class="badge-mini-card">' +
+          '<span class="badge-mini-icon">' + s.b.icon + '</span>' +
+          '<div class="badge-mini-body">' +
+            '<div class="badge-mini-info">' +
+              '<span class="badge-mini-name">' + s.b.name + '</span>' +
+              '<span class="badge-mini-progress">' + s.val + '/' + s.tgt + '</span>' +
+            '</div>' +
+            '<div class="badge-mini-bar-wrap"><div class="badge-mini-bar-fill" style="width:' + s.pct + '%"></div></div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // ── Streak reminder (once per session) ──────────────────────────────────
+    if (!window._streakReminderShown) {
+      window._streakReminderShown = true;
+      if (typeof showStreakReminder !== 'undefined') showStreakReminder(stats.streak, stats.completedToday);
+    }
+
     // Refresh hero card if achievements tab is visible
     if (currentSection === 'achievements') renderMyProfileHero();
   }
@@ -542,10 +612,12 @@
   function _renderQuestList(quests) {
     return quests.map(function(q) {
       return '<div class="quest-card' + (q.done ? ' done' : '') + '">' +
-        '<div class="quest-icon">' + q.icon + '</div>' +
+        '<div class="quest-icon' + (q.done ? ' done' : '') + '">' + (q.done ? '✅' : q.icon) + '</div>' +
         '<div class="quest-content">' +
           '<div class="quest-title">' + q.label + '</div>' +
-          '<div class="quest-reward ' + (q.done ? 'done' : '') + '">' + (q.done ? '✓ Hoàn thành · ' : '') + q.reward + '</div>' +
+          '<div class="quest-reward ' + (q.done ? 'done' : '') + '">' +
+            (q.done ? '🎉 Hoàn thành!' : '<span class="quest-xp-badge">' + q.reward + '</span>') +
+          '</div>' +
         '</div>' +
         (q.done ? '<div class="quest-check">✓</div>' : '') +
       '</div>';
@@ -555,15 +627,80 @@
   function renderDailyQuests() {
     var el = document.getElementById('daily-quests-list');
     if (!el) return;
-    var dateEl = document.getElementById('quest-date');
-    if (dateEl) dateEl.textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' });
     el.innerHTML = _renderQuestList(_buildQuestItems());
+    renderStreakBlock();
   }
 
   function renderOverviewQuests() {
     var el = document.getElementById('overview-quests');
     if (!el) return;
     el.innerHTML = _renderQuestList(_buildQuestItems());
+  }
+
+  // ── Streak Block (Doulingo-style) ────────────────────────────────────────
+  function renderStreakBlock() {
+    var name = currentUser ? (currentUser.name || '') : '';
+    var stats = computeUserGameStats(name);
+    var streak = stats.streak || 0;
+    var bigNum = document.getElementById('streak-big-number');
+    if (bigNum) { bigNum.textContent = streak; bigNum.style.animation = 'none'; void bigNum.offsetWidth; bigNum.style.animation = ''; }
+    renderStreakCalendar(stats.completionDaysArr || []);
+    var commitBtn = document.getElementById('commit-btn');
+    if (commitBtn) {
+      var todayKey2 = new Date().toISOString().slice(0, 10);
+      var committed = localStorage.getItem('qlda_committed_' + todayKey2) === '1';
+      commitBtn.textContent = committed ? '✅ Đã cam kết hôm nay!' : '⚡ Tôi cam kết hôm nay';
+      commitBtn.classList.toggle('committed', committed);
+    }
+  }
+
+  function renderStreakCalendar(completionDaysArr) {
+    var cal = document.getElementById('streak-calendar');
+    if (!cal) return;
+    var doneSet = new Set(completionDaysArr);
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    var html = '';
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(today); d.setDate(d.getDate() - i);
+      var key = d.toISOString().slice(0, 10);
+      var label = dayLabels[d.getDay()];
+      var isToday = (i === 0);
+      var done = doneSet.has(key);
+      var stateClass = isToday
+        ? (done ? 'streak-dot-done streak-dot-today' : 'streak-dot-today streak-dot-empty')
+        : (done ? 'streak-dot-done' : 'streak-dot-empty');
+      html += '<div class="streak-day">' +
+        '<span class="streak-day-label' + (isToday ? ' streak-day-label-today' : '') + '">' + label + '</span>' +
+        '<div class="streak-dot ' + stateClass + '">' + (done ? '<span class="streak-dot-check">✓</span>' : '') + '</div>' +
+      '</div>';
+    }
+    cal.innerHTML = html;
+  }
+
+  function handleCommitButton() {
+    var todayKey3 = new Date().toISOString().slice(0, 10);
+    var lsKey = 'qlda_committed_' + todayKey3;
+    if (localStorage.getItem(lsKey) !== '1') {
+      localStorage.setItem(lsKey, '1');
+      showXPPopup(0, { icon: '💪', source: 'Đã cam kết!' });
+    }
+    var btn = document.getElementById('commit-btn');
+    if (btn) { btn.textContent = '✅ Đã cam kết hôm nay!'; btn.classList.add('committed'); }
+  }
+
+  function showStreakReminder(streak, completedToday) {
+    if (streak <= 0 || completedToday >= 1) return;
+    if (document.getElementById('streak-reminder-toast')) return;
+    var toast = document.createElement('div');
+    toast.id = 'streak-reminder-toast';
+    toast.className = 'streak-reminder-toast';
+    toast.innerHTML = '🔥 Còn 1 việc nữa để giữ chuỗi <strong>' + streak + ' ngày</strong>!';
+    document.body.appendChild(toast);
+    setTimeout(function() {
+      toast.classList.add('streak-reminder-hide');
+      setTimeout(function() { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 500);
+    }, 4500);
   }
 
   // === Initialization ===
@@ -2732,14 +2869,14 @@
 
   function openTaskModalForProject(projectId, projectName) {
     openModal('task');
-    // Pre-select project after modal opens
+    // Pre-select project BEFORE the 100ms setTimeout in createTaskModal fires
     setTimeout(() => {
       const projectSelect = document.querySelector('select[name="projectId"]');
       if (projectSelect) {
         projectSelect.value = projectId;
         projectSelect.dispatchEvent(new Event('change'));
       }
-    }, 100);
+    }, 50);
   }
 
   // === Enhanced Modal Management ===
@@ -3157,9 +3294,10 @@
                         var pList = isEdit
                           ? String(data[COL.P_PARTICIPANTS] || '').split(',').map(function(x){ return x.trim(); }).filter(Boolean)
                           : [];
-                        var chk = pList.indexOf(s[COL.S_NAME]) !== -1 ? 'checked' : '';
+                        // Support both old (name) and new (ID) format
+                        var chk = (pList.indexOf(s[COL.S_ID]) !== -1 || pList.indexOf(s[COL.S_NAME]) !== -1) ? 'checked' : '';
                         return '<label class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded-lg cursor-pointer text-sm">' +
-                          '<input type="checkbox" class="project-participant-cb" value="' + s[COL.S_NAME] + '" ' + chk + '>' +
+                          '<input type="checkbox" class="project-participant-cb" value="' + s[COL.S_ID] + '" ' + chk + '>' +
                           '<span class="flex-1">' + s[COL.S_NAME] + '</span>' +
                           '<span class="text-xs text-gray-400">' + (s[COL.S_POS] || '') + '</span>' +
                         '</label>';
@@ -3195,22 +3333,10 @@
         return !role.includes('admin');
       });
     } else {
-      // Nhân viên: giao việc cho tất cả thành viên trong cùng dự án
-      // (manager + participants + assignees có task trong dự án)
-      // Dự án được xác định từ select[name="projectId"] hoặc dùng tất cả dự án hiện thị
-      const memberNames = new Set();
-      const visibleProjects = allProjects;
-      visibleProjects.forEach(function(proj) {
-        if (proj[COL.P_MANAGER]) memberNames.add(proj[COL.P_MANAGER]);
-        String(proj[COL.P_PARTICIPANTS] || '').split(',').forEach(function(s) {
-          s = s.trim(); if (s) memberNames.add(s);
-        });
-        allTasks.forEach(function(t) {
-          if (t[COL.T_PID] === proj[COL.P_ID] && t[COL.T_ASSIGNEE]) memberNames.add(t[COL.T_ASSIGNEE]);
-        });
-      });
-      assignableStaff = allStaff.filter(function(staff) {
-        return memberNames.has(staff[COL.S_NAME]);
+      // Nhân viên: giao việc cho tất cả non-admin staff
+      assignableStaff = allStaff.filter((staff) => {
+        const role = (staff[COL.S_ROLE] || '').toLowerCase();
+        return !role.includes('admin');
       });
     }
 
@@ -3308,15 +3434,40 @@
         const selectedProjectId = projectSelect.value;
         const selectedProject = allProjects.find((p) => p[COL.P_ID] === selectedProjectId);
 
-        if (isAdmin()) {
-          assigneeSelect.disabled = false;
-        } else if (selectedProject && selectedProject[COL.P_MANAGER] === currentUser.name) {
-          // Chỉ Admin và người phụ trách dự án mới được chọn tự do
-          assigneeSelect.disabled = false;
-        } else {
-          assigneeSelect.disabled = true;
-          assigneeSelect.value = currentUser.name;
+        // Build member list for the selected project
+        const memberNames = new Set();
+        if (selectedProject) {
+          if (selectedProject[COL.P_MANAGER]) memberNames.add(selectedProject[COL.P_MANAGER]);
+          String(selectedProject[COL.P_PARTICIPANTS] || '').split(',').forEach(function(s) {
+            s = s.trim(); if (s) memberNames.add(s);
+          });
+          allTasks.forEach(function(t) {
+            if (t[COL.T_PID] === selectedProject[COL.P_ID] && t[COL.T_ASSIGNEE]) memberNames.add(t[COL.T_ASSIGNEE]);
+          });
         }
+
+        // Rebuild assignee options based on selected project
+        const currentAssignee = assigneeSelect.value;
+        let staffPool;
+        if (isAdmin()) {
+          staffPool = allStaff;
+        } else if (isManager() || isTeamLeader()) {
+          staffPool = allStaff.filter(s => !(s[COL.S_ROLE] || '').toLowerCase().includes('admin'));
+        } else {
+          // Regular employee: show all non-admin staff so they can assign to teammates
+          // (filtering by project participants is unreliable due to client-side caching)
+          staffPool = allStaff.filter(s => !(s[COL.S_ROLE] || '').toLowerCase().includes('admin'));
+        }
+
+        assigneeSelect.innerHTML = '<option value="">-- Chọn người thực hiện --</option>' +
+          staffPool.map(function(staff) {
+            const email = staff[COL.S_EMAIL] ? ` (${staff[COL.S_EMAIL]})` : '';
+            const sel = staff[COL.S_NAME] === currentAssignee ? 'selected' : '';
+            return `<option value="${staff[COL.S_NAME]}" ${sel}>${staff[COL.S_NAME]}${email}</option>`;
+          }).join('');
+
+        // Always enabled — all roles can choose from their allowed pool
+        assigneeSelect.disabled = false;
       }
 
       if (projectSelect && startDateInput && dueDateInput) {
@@ -3635,21 +3786,31 @@
                       <label class="form-label">Mật khẩu *</label>
                       <input type="text" name="password" class="form-input" required 
                              value="${isEdit ? data[COL.S_PASSWORD] || '' : ''}"
-                        
-                  
-                  <div class="form-group">
-                      <label class="form-label">Phòng ban</label>
-                      <input type="text" name="department" class="form-input"
-                             value="${isEdit ? data[COL.S_DEPT] || '' : ''}"
-                             placeholder="VD: Phòng Kinh doanh">
-                  </div>     placeholder="Nhập mật khẩu">
+                             placeholder="Nhập mật khẩu">
                   </div>
                   
                   <div class="form-group">
                       <label class="form-label">Phòng ban</label>
-                      <input type="text" name="department" class="form-input"
+                      <input type="text" name="department" class="form-input" list="staff-dept-list"
                              value="${isEdit ? data[COL.S_DEPT] || '' : ''}"
-                             placeholder="VD: Phòng Kinh doanh">
+                             placeholder="Chọn hoặc nhập phòng ban...">
+                      <datalist id="staff-dept-list">
+                          <option value="Ban Giám đốc">
+                          <option value="Phòng Kỹ thuật">
+                          <option value="Phòng Kinh doanh">
+                          <option value="Phòng Marketing">
+                          <option value="Phòng Nhân sự">
+                          <option value="Phòng Kế toán">
+                          <option value="Phòng Hành chính">
+                          <option value="Phòng Vận hành">
+                          <option value="Phòng Dự án">
+                          <option value="Phòng Thiết kế">
+                          <option value="Phòng Chăm sóc khách hàng">
+                          <option value="Phòng Pháp lý">
+                          <option value="Phòng Mua hàng">
+                          <option value="Phòng Sản xuất">
+                          <option value="Phòng Nghiên cứu & Phát triển">
+                      </datalist>
                   </div>
                   
                   <div class="flex justify-end space-x-3 mt-6">
@@ -4190,7 +4351,8 @@
       // Dự án mình được liệt kê là người tham gia
       var participants = String(project[COL.P_PARTICIPANTS] || '')
         .split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-      if (participants.indexOf(currentUser.name) !== -1) return true;
+      // Support both old (name) and new (ID) format
+      if (participants.indexOf(currentUser.id) !== -1 || participants.indexOf(currentUser.name) !== -1) return true;
 
       // Dự án mình có nhiệm vụ được giao (tham gia ngầm)
       return allTasks.some(function(t) {
@@ -5460,6 +5622,7 @@
             [COL.P_START]: data.startDate,
             [COL.P_END]: data.endDate,
             [COL.P_STATUS]: data.status,
+            [COL.P_PARTICIPANTS]: data.participants !== undefined ? data.participants : (allProjects[index][COL.P_PARTICIPANTS] || ''),
           },
         };
 
@@ -6744,6 +6907,11 @@
       '<option value="Phòng Vận hành" />' +
       '<option value="Phòng Dự án" />' +
       '<option value="Phòng Thiết kế" />' +
+      '<option value="Phòng Chăm sóc khách hàng" />' +
+      '<option value="Phòng Pháp lý" />' +
+      '<option value="Phòng Mua hàng" />' +
+      '<option value="Phòng Sản xuất" />' +
+      '<option value="Phòng Nghiên cứu & Phát triển" />' +
       '</datalist>' +
       '</div>' +
       '<div><label class="block text-sm font-medium text-gray-700 mb-1">Giới thiệu</label><textarea id="profile-bio" class="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 h-24 resize-none">' + (currentUser.bio || '') + '</textarea></div>' +
@@ -6886,28 +7054,12 @@
     { id:'quan_ly', group:'management', icon:'📁', name:'Quản lý',
       levels:[{lv:1,target:1,xp:30},{lv:2,target:2,xp:70},{lv:3,target:4,xp:140},{lv:4,target:8,xp:260},{lv:5,target:12,xp:480}],
       getValue:function(s){ return s.managedProjects; }, unit:'dự án quản lý' },
-    // ── Tầng Chiến Lược ────────────────────────────────────────────────────────
-    { id:'anh_huong', group:'leadership', icon:'🚀', name:'Ảnh hưởng',
-      levels:[{lv:1,target:3,xp:25},{lv:2,target:10,xp:60},{lv:3,target:20,xp:120},{lv:4,target:40,xp:240},{lv:5,target:80,xp:450}],
-      getValue:function(s){ return s.totalDependentCount; }, unit:'dependency tổng' },
-    { id:'xuat_sac', group:'leadership', icon:'💎', name:'Xuất sắc',
-      levels:[{lv:1,target:1,xp:60},{lv:2,target:2,xp:130},{lv:3,target:3,xp:260},{lv:4,target:4,xp:450},{lv:5,target:5,xp:750}],
-      getValue:function(s){
-        var m = 0;
-        if (s.completedAll >= 30 && s.onTimeRate >= 75 && s.streak >= 5)  m = 1;
-        if (s.completedAll >= 70 && s.onTimeRate >= 80 && s.streak >= 10) m = 2;
-        if (s.completedAll >= 150 && s.onTimeRate >= 85 && s.streak >= 15) m = 3;
-        if (s.completedAll >= 250 && s.onTimeRate >= 90 && s.streak >= 25) m = 4;
-        if (s.completedAll >= 400 && s.onTimeRate >= 95 && s.streak >= 35) m = 5;
-        return m;
-      }, unit:'mốc' },
   ];
 
   var BADGE_GROUPS = [
     { id:'execution',    label:'👨‍💻 Thực Thi',   icon:'💼', color:'#3b82f6', lightBg:'#eff6ff' },
     { id:'coordination', label:'👥 Điều Phối',  icon:'🤝', color:'#8b5cf6', lightBg:'#f5f3ff' },
     { id:'management',   label:'📊 Quản Lý',    icon:'📁', color:'#f59e0b', lightBg:'#fffbeb' },
-    { id:'leadership',   label:'🧠 Chiến Lược', icon:'🚀', color:'#ef4444', lightBg:'#fef2f2' },
   ];
 
   // Backward-compat aliases

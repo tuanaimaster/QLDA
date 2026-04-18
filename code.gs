@@ -412,14 +412,15 @@ function getDataForUser() {
           // Kiểm tra người tham gia dự án
           const participants = String(project[PROJECT_PARTICIPANTS_COLUMN_NAME] || '')
             .split(',').map((s) => s.trim()).filter(Boolean);
-          if (participants.includes(currentUser.name)) return true;
+          if (participants.includes(currentUser.id) || participants.includes(currentUser.name)) return true;
           if (userTaskProjectIds.includes(project[PROJECT_ID_COLUMN_NAME])) return true;
           return false;
         });
       } else {
-        // === Nhân viên: chỉ xem dự án mình đang tham gia hoặc có nhiệm vụ ===
+        // === Nhân viên: xem dự án mình tham gia, có nhiệm vụ, hoặc đã tạo task ===
         tasks = tasks.filter((task) => {
-          return String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim() === currentUser.name;
+          return String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim() === currentUser.name
+            || String(task[TASK_CREATED_BY_COLUMN_NAME] || '').trim() === currentUser.name;
         });
 
         const userTaskProjectIds = new Set(
@@ -431,7 +432,7 @@ function getDataForUser() {
           // Kiểm tra danh sách người tham gia
           const participants = String(project[PROJECT_PARTICIPANTS_COLUMN_NAME] || '')
             .split(',').map((s) => s.trim()).filter(Boolean);
-          return participants.includes(currentUser.name);
+          return participants.includes(currentUser.id) || participants.includes(currentUser.name);
         });
       }
 
@@ -455,24 +456,12 @@ function getDataForUser() {
           return !role.includes('admin');
         });
       } else {
-        // THAY ĐỔI: Kiểm tra nếu nhân viên là người phụ trách dự án
-        const userManagedProjects = projects.filter(
-          (project) => project[PROJECT_MANAGER_COLUMN_NAME] === currentUser.name
-        );
-
-        if (userManagedProjects.length > 0) {
-          // Nếu là người phụ trách dự án, có thể thấy tất cả nhân viên trừ admin
-          filteredStaff = staff.filter((s) => {
-            const role = String(s[STAFF_ROLE_COLUMN_NAME] || '').toLowerCase();
-            return !role.includes('admin');
-          });
-        } else {
-          // Người dùng thường chỉ thấy mình
-          const currentUserStaff = staff.find(
-            (s) => s[STAFF_NAME_COLUMN_NAME] === currentUser.name
-          );
-          filteredStaff = currentUserStaff ? [currentUserStaff] : [];
-        }
+        // Nhân viên thường và Trưởng nhóm: thấy tất cả nhân viên trừ admin
+        // (cần thiết để tạo và giao nhiệm vụ cho nhau)
+        filteredStaff = staff.filter((s) => {
+          const role = String(s[STAFF_ROLE_COLUMN_NAME] || '').toLowerCase();
+          return !role.includes('admin');
+        });
       }
     }
 
@@ -1037,12 +1026,21 @@ function updateProject(projectId, projectData) {
       return { success: false, error: 'Tên dự án là bắt buộc.' };
     }
 
+    // Đảm bảo cột 'Người tham gia' tồn tại trong sheet
+    if (!headers.includes(PROJECT_PARTICIPANTS_COLUMN_NAME)) {
+      const newColIndex = headers.length + 1;
+      projectSheet.getRange(1, newColIndex).setValue(PROJECT_PARTICIPANTS_COLUMN_NAME);
+      headers.push(PROJECT_PARTICIPANTS_COLUMN_NAME);
+    }
+
     const rowInfo = findRowById(projectSheet, idColIndex + 1, projectId);
     if (!rowInfo) return { success: false, error: `Không tìm thấy dự án ID: ${projectId}` };
 
     const rowNumber = rowInfo.rowNumber;
     const range = projectSheet.getRange(rowNumber, 1, 1, headers.length);
     const values = range.getValues()[0];
+    // Extend values array if new column was just added
+    while (values.length < headers.length) values.push('');
 
     let changesDetected = false;
 
@@ -1405,6 +1403,7 @@ function updateTask(taskId, taskData) {
 
     const updatedTask = oldTasks[foundTaskIndex];
     const previousAssignee = (updatedTask[TASK_ASSIGNEE_COLUMN_NAME] || '').trim(); // Lưu lại người cũ
+    const previousStatus  = (updatedTask[TASK_STATUS_COLUMN_NAME]   || '').trim(); // Lưu lại trạng thái cũ
     updatedTask[TASK_NAME_COLUMN_NAME] = String(taskData.name).trim();
     updatedTask[TASK_DESC_COLUMN_NAME] = taskData.description
       ? String(taskData.description).trim()
@@ -1441,6 +1440,22 @@ function updateTask(taskId, taskData) {
           : taskData.projectId;
         const currentUser2 = getCurrentUser();
         queueTaskNotification(taskId, taskData.name, newAssignee, projectNameVal, 'assigned', currentUser2 ? currentUser2.name : '');
+      }
+    } catch (e) { /* không ảnh hưởng đến kết quả chính */ }
+
+    // Thông báo khi nhiệm vụ được đánh dấu Hoàn thành
+    try {
+      const newSt = (taskData.status || '').toLowerCase();
+      if (newSt.includes('hoàn thành') && !previousStatus.toLowerCase().includes('hoàn thành')) {
+        const assigneeToNotify = (taskData.assignee || previousAssignee || '').trim();
+        if (assigneeToNotify) {
+          const projectNameColIdx3 = headers.indexOf(PROJECT_NAME_COLUMN_NAME);
+          const projectNameVal3 = projectNameColIdx3 !== -1
+            ? projectSheet.getRange(oldProjectRow, projectNameColIdx3 + 1).getValue()
+            : taskData.projectId;
+          const currentUser3 = getCurrentUser();
+          queueTaskNotification(taskId, taskData.name, assigneeToNotify, projectNameVal3, 'completed', currentUser3 ? currentUser3.name : '');
+        }
       }
     } catch (e) { /* không ảnh hưởng đến kết quả chính */ }
 

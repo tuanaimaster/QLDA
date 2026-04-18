@@ -3,7 +3,7 @@
 set -e
 BOT_DIR="/root/QLDABot"
 cd "$BOT_DIR"
-git pull origin main
+git pull origin master
 cd bot
 .venv/bin/pip install -r requirements.txt -q
 systemctl restart qlda_bot

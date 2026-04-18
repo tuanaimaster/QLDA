@@ -4259,4 +4259,220 @@
     outline-offset: 3px;
     transform: scale(1.12);
   }
+
+  /* ═══════════════════════════════════════════════════════════
+   * GAMIFIED UI — Streak Block, Header Chips, Badge Mini Row
+   * ═══════════════════════════════════════════════════════════ */
+
+  /* ── Streak Block (Duolingo-style) ───────────────────────── */
+  .streak-block {
+    background: linear-gradient(160deg, #fff7ed, #fff);
+    border: 1.5px solid #fed7aa;
+    border-radius: 24px;
+    padding: 28px 24px 20px;
+    text-align: center;
+  }
+  .streak-block-header { margin-bottom: 8px; }
+  .streak-big-num {
+    font-size: 72px;
+    font-weight: 900;
+    color: #f97316;
+    line-height: 1;
+    letter-spacing: -2px;
+    animation: chipPop 0.4s ease both;
+  }
+  .streak-block-subtitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fb923c;
+    margin-top: 4px;
+    margin-bottom: 24px;
+  }
+
+  /* ── Streak Calendar ─────────────────────────────────────── */
+  .streak-calendar {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .streak-day { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .streak-day-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+  }
+  .streak-day-label-today { color: #f97316; }
+  .streak-dot {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .streak-dot-done {
+    background: #f97316;
+    box-shadow: 0 4px 14px rgba(249,115,22,0.4);
+  }
+  .streak-dot-today.streak-dot-done {
+    background: #38bdf8;
+    box-shadow: 0 4px 14px rgba(56,189,248,0.4);
+  }
+  .streak-dot-today.streak-dot-empty {
+    background: transparent;
+    border: 2.5px solid #94a3b8;
+  }
+  .streak-dot-empty:not(.streak-dot-today) {
+    background: transparent;
+    border: 2.5px solid #e2e8f0;
+  }
+  .streak-dot-check { color: #fff; font-weight: 900; font-size: 17px; }
+
+  /* ── Commit Button ───────────────────────────────────────── */
+  .commit-btn {
+    width: 100%;
+    max-width: 340px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    border: none;
+    border-radius: 16px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(249,115,22,0.4);
+    transition: transform 0.15s, box-shadow 0.15s, background 0.3s;
+    margin-bottom: 20px;
+  }
+  .commit-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(249,115,22,0.55); }
+  .commit-btn.committed {
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 8px 24px rgba(16,185,129,0.4);
+  }
+  .streak-quests-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  /* ── Header Daily Row (sidebar chips) ───────────────────── */
+  .header-daily-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .header-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #f1f5f9;
+    color: #475569;
+    transition: transform 0.2s;
+  }
+  .chip-new    { background: #dcfce7; color: #15803d; }
+  .chip-done   { background: #dbeafe; color: #1d4ed8; }
+  .chip-streak { background: #fff7ed; color: #c2410c; }
+  .chip-streak-active { animation: streakGlow 2s ease-in-out infinite; }
+  .chip-icon { font-size: 12px; }
+  .chip-val  { font-size: 12px; font-weight: 900; }
+
+  /* ── Header Badge Mini Row ───────────────────────────────── */
+  .header-badge-row { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+  .badge-mini-card {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 8px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+  }
+  .badge-mini-icon { font-size: 16px; flex-shrink: 0; }
+  .badge-mini-body { flex: 1; min-width: 0; }
+  .badge-mini-info { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+  .badge-mini-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .badge-mini-progress { font-size: 10px; font-weight: 700; color: #64748b; white-space: nowrap; }
+  .badge-mini-bar-wrap { height: 3px; background: #e2e8f0; border-radius: 999px; margin-top: 3px; }
+  .badge-mini-bar-fill { height: 100%; background: linear-gradient(90deg,#0ea5e9,#14b8a6); border-radius: 999px; transition: width 0.4s ease; }
+  .header-badge-link {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    color: #7c3aed;
+    font-weight: 600;
+    text-decoration: none;
+    margin-top: 4px;
+    padding: 2px 0;
+    transition: color 0.2s;
+  }
+  .header-badge-link:hover { color: #5b21b6; }
+
+  /* ── Quest XP Badge ─────────────────────────────────────── */
+  .quest-xp-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    background: linear-gradient(135deg, #0ea5e9, #14b8a6);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 999px;
+  }
+
+  /* ── XP Popup source label ───────────────────────────────── */
+  .xp-popup-source {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.8);
+    margin-top: 1px;
+  }
+
+  /* ── Streak Reminder Toast ──────────────────────────────── */
+  .streak-reminder-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #f97316, #dc2626);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 12px 20px;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(249,115,22,0.5);
+    z-index: 99998;
+    white-space: nowrap;
+    animation: toastSlideIn 0.4s ease both;
+    pointer-events: none;
+  }
+  .streak-reminder-hide { animation: toastSlideIn 0.5s ease reverse forwards; }
+
+  /* ── Keyframe Animations ────────────────────────────────── */
+  @keyframes streakGlow {
+    0%, 100% { box-shadow: 0 0 0 rgba(249,115,22,0); background: #fff7ed; }
+    50%       { box-shadow: 0 0 8px 3px rgba(249,115,22,0.5); background: #ffedd5; }
+  }
+  @keyframes chipPop {
+    0%   { transform: scale(0.7); opacity: 0; }
+    70%  { transform: scale(1.15); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes toastSlideIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
 </style>

@@ -1,6 +1,7 @@
 """
 config.py — Cấu hình bot từ biến môi trường
 """
+
 import os
 from dotenv import load_dotenv
 
@@ -14,7 +15,7 @@ DAILY_MINUTE: int = int(os.getenv("DAILY_MINUTE", "0"))
 DAILY_SUMMARY_CHAT_ID: str = os.getenv("DAILY_SUMMARY_CHAT_ID", "")
 
 # Sheet names (khớp với code.gs)
-SHEET_TASKS = "Dự án/Nhiệm vụ"   # Tasks stored as JSON in project rows
+SHEET_TASKS = "Dự án/Nhiệm vụ"  # Tasks stored as JSON in project rows
 SHEET_STAFF = "Người dùng"
 SHEET_ACHIEVEMENTS = "Thành tích"
 SHEET_TELEGRAM_USERS = "Telegram Users"
