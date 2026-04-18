@@ -7264,8 +7264,8 @@
             '<div class="gm-hero-info">' +
               '<div class="gm-hero-name">' + name + '</div>' +
               '<div class="gm-hero-role">' +
-                '<span class="gm-tier-badge" style="background:' + tier.color + '20;color:' + tier.color + ';border:1px solid ' + tier.color + '40;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:6px;">' + tier.name.toUpperCase() + '</span>' +
-                (currentUser.role || '') + (myRank > 0 ? ' · Hạng #' + myRank : '') +
+                '<span class="gm-tier-badge" style="background:' + tier.color + '20;color:' + tier.color + ';border:1px solid ' + tier.color + '40;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:6px;">' + lvlInfo.name.toUpperCase() + '</span>' +
+                myStats.xp + ' 🪙' + (myRank > 0 ? ' · Hạng #' + myRank : '') +
               '</div>' +
               '<div class="gm-hero-bar"><div class="gm-hero-bar-fill" style="width:' + lvlInfo.progress + '%;background:' + tier.color + ';"></div></div>' +
               '<div class="gm-hero-sub">Lv.' + lvlInfo.level + ' ' + lvlInfo.name + ' · ' + myStats.xp + ' XP · ' +
@@ -7275,23 +7275,13 @@
             '<button onclick="showCertificateModal()" class="gm-cert-btn" title="Chứng chỉ thành tích">🎓</button>' +
           '</div>' +
           '<div class="gm-hero-stats">' +
-            _heroStat('✅', myStats.completedAll, 'Đã xong') +
-            _heroStat('🔥', myStats.streak, 'Streak') +
             _heroStat('🎯', myStats.todayCompletedCount || 0, 'Hôm nay') +
+            _heroStat('✅', myStats.completedAll, 'Đã xong') +
+            _heroStat('🔥', myStats.streak, 'Kiên trì') +
             _heroStat('🏅', earnedBadges.length, 'Huy hiệu') +
-          '</div>' +
-          '<div class="gm-top3-grid">' +
-            topBadges.map(function(item) {
-              var b = item.badge;
-              var info = item.info;
-              return '<div class="gm-top3-card" data-badge-id="' + b.id + '">' +
-                '<div class="gm-top3-icon" style="--c1:' + info.tier.c1 + ';--c2:' + info.tier.c2 + ';">' + b.icon + '</div>' +
-                '<div class="gm-top3-meta">' +
-                  '<div class="gm-top3-name">' + b.name + '</div>' +
-                  '<div class="gm-top3-lv">Lv.' + info.displayLv + '</div>' +
-                '</div>' +
-              '</div>';
-            }).join('') +
+            _heroStat('🤲', myStats.assignerCount || 0, 'Giao việc') +
+            _heroStat('⏰', Math.round(myStats.onTimeRate || 0) + '%', 'Đúng hạn') +
+            _heroStat('📁', myStats.managedProjects || 0, 'Quản lý') +
           '</div>' +
         '</div>';
     } catch (err) {
