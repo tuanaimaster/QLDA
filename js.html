@@ -217,8 +217,8 @@
   function _dayKey(d) {
     if (!d) return '';
     var c = new Date(d);
-    c.setHours(0, 0, 0, 0);
-    return c.toISOString().slice(0, 10);
+    // Use LOCAL date to avoid UTC timezone offset mismatch
+    return c.getFullYear() + '-' + String(c.getMonth() + 1).padStart(2, '0') + '-' + String(c.getDate()).padStart(2, '0');
   }
 
   function computeUserGameStats(staffName) {
@@ -322,7 +322,8 @@
     if (!completionDays.has(check.getTime())) check.setDate(check.getDate() - 1);
     while (completionDays.has(check.getTime())) { streak++; check.setDate(check.getDate() - 1); }
 
-    var todayStr = today.toISOString().slice(0, 10);
+    // Use local date string (not UTC) to match formatDateToISOString format
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
     var completedToday = completedTasks.filter(function(t) {
       return (t[COL.T_REPORT_DATE] || '').slice(0, 10) === todayStr;
     }).length;
@@ -680,6 +681,30 @@
   });
 
   function checkAuthenticationAndInitialize() {
+    // === Instant cache restore (show data immediately while server loads) ===
+    try {
+      var cached = JSON.parse(localStorage.getItem('qlda-data-cache') || 'null');
+      var cachedSession = localStorage.getItem('qlda-session-email');
+      // Only restore if cache is < 30 minutes old
+      if (cached && cached.user && (Date.now() - cached.ts) < 1800000) {
+        currentUser = cached.user;
+        isAuthenticated = true;
+        allProjects = cached.projects || [];
+        allTasks = cached.tasks || [];
+        allStaff = cached.staff || [];
+        allCommentCounts = cached.commentCounts || {};
+        updateUIForUser(currentUser);
+        renderStats(cached.summaryStats);
+        renderProjects(); renderTasks();
+        renderLocalActivity(); renderPriorityTasksMini();
+        renderTaskStats(); renderProjectStats();
+        updateUserGameUI(); renderOverviewQuests();
+        if (currentSection === 'kanban') renderKanban();
+        else if (currentSection === 'gantt') renderGanttChart();
+        else if (currentSection === 'achievements') renderAchievements();
+      }
+    } catch(e) {}
+
     showLoading('Đang kiểm tra đăng nhập...');
 
     google.script.run
@@ -793,6 +818,12 @@
     allTasks = dataResponse.tasks || [];
     allStaff = dataResponse.staff || [];
     allCommentCounts = dataResponse.commentCounts || {};
+
+    // Save to localStorage cache for instant next-load
+    try {
+      var cachePayload = { user: currentUser, projects: allProjects, tasks: allTasks, staff: allStaff, commentCounts: allCommentCounts, summaryStats: dataResponse.summaryStats, ts: Date.now() };
+      localStorage.setItem('qlda-data-cache', JSON.stringify(cachePayload));
+    } catch(e) {}
 
     // Restore avatar from localStorage if exists
     var storedUser = null;
@@ -5415,10 +5446,21 @@
       });
     }
 
-    const highPriorityTasks = userTasks.filter((task) => {
+    var highPriorityTasks = userTasks.filter((task) => {
       const priority = (task[COL.T_PRIORITY] || '').toLowerCase();
       const status = (task[COL.T_STATUS] || '').toLowerCase();
       return (priority.includes('cao') || priority.includes('khẩn')) && !status.includes('hoàn thành');
+    });
+
+    // Sort: Khẩn cấp first, then Cao, then by deadline (earliest first)
+    var PRIORITY_ORDER = { 'Khẩn cấp': 0, 'Cao': 1 };
+    highPriorityTasks.sort(function(a, b) {
+      var pa = PRIORITY_ORDER[a[COL.T_PRIORITY]] !== undefined ? PRIORITY_ORDER[a[COL.T_PRIORITY]] : 2;
+      var pb = PRIORITY_ORDER[b[COL.T_PRIORITY]] !== undefined ? PRIORITY_ORDER[b[COL.T_PRIORITY]] : 2;
+      if (pa !== pb) return pa - pb;
+      var da = a[COL.T_DUE] ? new Date(a[COL.T_DUE]).getTime() : Infinity;
+      var db = b[COL.T_DUE] ? new Date(b[COL.T_DUE]).getTime() : Infinity;
+      return da - db;
     });
 
     if (highPriorityTasks.length === 0) {
