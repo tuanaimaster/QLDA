@@ -560,8 +560,8 @@
       if (typeof showStreakReminder !== 'undefined') showStreakReminder(stats.streak, stats.completedToday);
     }
 
-    // Refresh hero card if achievements tab is visible
-    if (currentSection === 'achievements') renderMyProfileHero();
+    // Refresh hero card always (hero element exists in achievements tab)
+    renderMyProfileHero();
 
     // ── Coin balance ─────────────────────────────────────────────────────────
     var coinEl = document.getElementById('user-coin-balance');
@@ -5831,6 +5831,7 @@
             [COL.T_START]: data.startDate,
             [COL.T_DUE]: data.dueDate,
             [COL.T_COMPLETION]: parseInt(data.completion || 0),
+            [COL.T_REPORT_DATE]: data.reportDate || allTasks[index][COL.T_REPORT_DATE] || '',
           },
         };
 
