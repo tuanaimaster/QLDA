@@ -823,6 +823,7 @@
     renderProjectComparisonChart();
     renderStaffPerformanceChart();
     renderActivity(dataResponse.recentActivities);
+    renderLocalActivity();
     renderPriorityTasksMini();
     renderTaskStats();
     renderProjectStats();
@@ -3014,8 +3015,53 @@
     });
   }
 
+  function renderLocalActivity() {
+    var container = document.getElementById('recent-activity');
+    if (!container) return;
+    var myName = currentUser ? (currentUser.name || '') : '';
+    // Build activity feed from local allTasks (recently completed/updated)
+    var recentTasks = allTasks
+      .filter(function(t) { return t[COL.T_REPORT_DATE] || t[COL.T_STATUS]; })
+      .map(function(t) {
+        var dateStr = t[COL.T_REPORT_DATE] || t[COL.T_START] || '';
+        return { task: t, sortDate: dateStr };
+      })
+      .filter(function(x) { return x.sortDate; })
+      .sort(function(a, b) { return b.sortDate.localeCompare(a.sortDate); })
+      .slice(0, 20);
+    if (!recentTasks.length) {
+      container.innerHTML = '<div class="loading-card">Không có hoạt động nào</div>';
+      return;
+    }
+    var PRIORITY_ICON = { 'Thấp': '🟢', 'Trung bình': '🔵', 'Cao': '🟠', 'Khẩn cấp': '🔴' };
+    var STATUS_ICON = { 'hoàn thành': '✅', 'đang thực hiện': '⚙️', 'tạm dừng': '⏸️', 'chưa bắt đầu': '⬜' };
+    container.innerHTML = recentTasks.map(function(x) {
+      var t = x.task;
+      var statusLow = (t[COL.T_STATUS] || '').toLowerCase();
+      var sIcon = STATUS_ICON[statusLow] || '📋';
+      var pIcon = PRIORITY_ICON[t[COL.T_PRIORITY]] || '';
+      var project = allProjects.find(function(p) { return p[COL.P_ID] === t[COL.T_PID]; });
+      var projectName = project ? project[COL.P_NAME] : '';
+      var dateDisplay = formatDateForDisplay(t[COL.T_REPORT_DATE] || t[COL.T_START], true);
+      var assignee = t[COL.T_ASSIGNEE] || '';
+      var isMe = assignee === myName;
+      return '<div class="activity-item">' +
+        '<div class="flex items-start space-x-3">' +
+          '<div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0" style="font-size:16px;">' + sIcon + '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<p class="text-sm font-medium text-gray-900">' + (t[COL.T_NAME] || 'Nhiệm vụ') + (pIcon ? ' ' + pIcon : '') + '</p>' +
+            '<p class="text-xs text-gray-600 mt-1">' + (t[COL.T_STATUS] || '') + (projectName ? ' · ' + projectName : '') + '</p>' +
+            '<p class="text-xs text-gray-500 mt-1">' + (isMe ? 'Bạn' : assignee) + ' · ' + dateDisplay + '</p>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
   function renderActivity(activities) {
-    const container = document.getElementById('recent-activity');
+    // Prefer local task-based feed if we have allTasks
+    if (allTasks && allTasks.length > 0) { renderLocalActivity(); return; }
+    var container = document.getElementById('recent-activity');
     if (!container) return;
 
     if (!activities || activities.length === 0) {
@@ -5372,7 +5418,7 @@
     const highPriorityTasks = userTasks.filter((task) => {
       const priority = (task[COL.T_PRIORITY] || '').toLowerCase();
       const status = (task[COL.T_STATUS] || '').toLowerCase();
-      return priority.includes('cao') && !status.includes('hoàn thành');
+      return (priority.includes('cao') || priority.includes('khẩn')) && !status.includes('hoàn thành');
     });
 
     if (highPriorityTasks.length === 0) {
@@ -6281,6 +6327,8 @@
                   renderStats();
                   renderProjectStats();
                   renderProjects();
+                  renderPriorityTasksMini();
+                  renderLocalActivity();
                 } else {
                   checkbox.checked = false;
                   checkbox.disabled = false;
