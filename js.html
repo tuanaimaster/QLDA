@@ -7603,7 +7603,8 @@
               '<div class="gm-hero-name">' + name + '</div>' +
               '<div class="gm-hero-role">' +
                 '<span class="gm-tier-badge" style="background:rgba(0,0,0,0.18);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:6px;">' + lvlInfo.name.toUpperCase() + '</span>' +
-                'XGOLD: 🏅' + (currentUser.coin != null ? currentUser.coin : 0) + (myRank > 0 ? ' · Hạng #' + myRank : '') +
+                '<span style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-radius:999px;padding:2px 10px 2px 6px;font-size:13px;font-weight:800;box-shadow:0 2px 8px rgba(217,119,6,0.45);margin-right:8px;">🥇 ' + (currentUser.coin != null ? currentUser.coin : 0) + '</span>' +
+                (myRank > 0 ? '<span style="font-size:12px;font-weight:600;opacity:0.9;">Hạng #' + myRank + '</span>' : '') +
               '</div>' +
               '<div class="gm-hero-bar"><div class="gm-hero-bar-fill" style="width:' + lvlInfo.progress + '%;background:' + tier.color + ';"></div></div>' +
               '<div class="gm-hero-sub">Lv.' + lvlInfo.level + ' ' + lvlInfo.name + ' · ' + myStats.xp + ' XP · ' +
