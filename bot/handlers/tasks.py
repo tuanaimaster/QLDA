@@ -1,6 +1,7 @@
 ﻿"""
 handlers/tasks.py — /mytasks, /donetask, /assign, /addtask (ConversationHandler)
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,9 +20,19 @@ from telegram.ext import (
 )
 
 from config import (
-    T_ID, T_NAME, T_STATUS, T_PRIORITY, T_ASSIGNEE,
-    T_DUE, T_START, T_COMPLETION, T_DESC,
-    TASK_STATUSES, PRIORITIES, COL_STAFF_ROLE, COL_TG_STAFF,
+    T_ID,
+    T_NAME,
+    T_STATUS,
+    T_PRIORITY,
+    T_ASSIGNEE,
+    T_DUE,
+    T_START,
+    T_COMPLETION,
+    T_DESC,
+    TASK_STATUSES,
+    PRIORITIES,
+    COL_STAFF_ROLE,
+    COL_TG_STAFF,
 )
 from sheets import SheetsDB
 
@@ -29,8 +40,14 @@ logger = logging.getLogger(__name__)
 
 # ConversationHandler states
 (
-    ADD_PROJECT, ADD_NAME, ADD_ASSIGNEE, ADD_PRIORITY, ADD_DUE, ADD_CONFIRM
-) = range(6)
+    ADD_PROJECT,
+    ADD_SUBTASK_CHOICE,
+    ADD_PARENT_TASK,
+    ADD_NAME,
+    ADD_DUE,
+    ADD_ASSIGNEE,
+    ADD_CONFIRM,
+) = range(7)
 
 STATUS_EMOJI = {
     "Chưa bắt đầu": "⚪",
@@ -46,9 +63,9 @@ KANBAN_COLUMNS = ["Chưa bắt đầu", "Đang thực hiện", "Tạm dừng"]
 # Status transitions: what button moves a task from this status
 # Value: (target_status_index, button_label)
 _TRANSITIONS: dict[str, list[tuple[int, str]]] = {
-    "Chưa bắt đầu":  [(1, "▶️ Bắt đầu")],
+    "Chưa bắt đầu": [(1, "▶️ Bắt đầu")],
     "Đang thực hiện": [(2, "✅ Xong"), (3, "⏸️ Dừng")],
-    "Tạm dừng":       [(1, "▶️ Tiếp tục")],
+    "Tạm dừng": [(1, "▶️ Tiếp tục")],
 }
 
 
@@ -76,12 +93,12 @@ def _build_kanban(my_name: str, tasks: list[dict]) -> tuple[str, InlineKeyboardM
 
         shown = col_tasks[:5]
         for t in shown:
-            tid    = t.get(T_ID, "")
-            tname  = t.get(T_NAME, "")
-            prio   = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
-            due    = t.get(T_DUE, "")
+            tid = t.get(T_ID, "")
+            tname = t.get(T_NAME, "")
+            prio = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
+            due = t.get(T_DUE, "")
             due_str = f" ⏰{due}" if due else ""
-            proj   = t.get("_projectName", "")
+            proj = t.get("_projectName", "")
             proj_str = f"  <i>({proj[:14]})</i>" if proj else ""
             lines.append(f"  {prio} <code>{tid}</code> {tname[:32]}{due_str}{proj_str}")
 
@@ -91,10 +108,12 @@ def _build_kanban(my_name: str, tasks: list[dict]) -> tuple[str, InlineKeyboardM
                 row_btns = []
                 for target_idx, btn_label in transitions:
                     target_status = TASK_STATUSES[target_idx]
-                    row_btns.append(InlineKeyboardButton(
-                        f"{btn_label}: {tname[:18]}",
-                        callback_data=f"tmove:{tid}:{target_idx}",
-                    ))
+                    row_btns.append(
+                        InlineKeyboardButton(
+                            f"{btn_label}: {tname[:18]}",
+                            callback_data=f"tmove:{tid}:{target_idx}",
+                        )
+                    )
                 keyboard_rows.append(row_btns)
 
         if len(col_tasks) > 5:
@@ -103,12 +122,15 @@ def _build_kanban(my_name: str, tasks: list[dict]) -> tuple[str, InlineKeyboardM
     if not active:
         lines.append("\n🎉 <b>Tất cả nhiệm vụ đã hoàn thành!</b> Xuất sắc!")
 
-    keyboard_rows.append([InlineKeyboardButton("🔄 Làm mới", callback_data="tmove:__refresh__:0")])
+    keyboard_rows.append(
+        [InlineKeyboardButton("🔄 Làm mới", callback_data="tmove:__refresh__:0")]
+    )
     return "\n".join(lines), InlineKeyboardMarkup(keyboard_rows)
 
 
 def _require_linked(func):
     """Decorator: reject command if user hasn't linked their account."""
+
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db = SheetsDB.get()
         linked = db.get_telegram_user(str(update.effective_user.id))
@@ -117,9 +139,12 @@ def _require_linked(func):
                 "❌ Bạn chưa liên kết tài khoản.\nDùng /link &lt;Mã NV&gt;.",
                 parse_mode=ParseMode.HTML,
             )
-            return ConversationHandler.END if hasattr(update, "_in_conversation") else None
+            return (
+                ConversationHandler.END if hasattr(update, "_in_conversation") else None
+            )
         context.user_data["_linked"] = linked
         return await func(update, context)
+
     return wrapper
 
 
@@ -148,10 +173,14 @@ async def cmd_mytasks(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     text, keyboard = _build_kanban(my_name, tasks)
-    await update.effective_message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+    await update.effective_message.reply_text(
+        text, parse_mode=ParseMode.HTML, reply_markup=keyboard
+    )
 
 
-async def handle_task_move_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_task_move_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Handle tmove:<task_id>:<status_idx> and legacy tdone:<task_id> inline buttons."""
     query = update.callback_query
     raw = query.data  # e.g. 'tmove:DA001-01:2'  or  'tdone:DA001-01'
@@ -176,7 +205,11 @@ async def handle_task_move_callback(update: Update, context: ContextTypes.DEFAUL
         except ValueError:
             status_idx = 2
 
-    new_status = TASK_STATUSES[status_idx] if 0 <= status_idx < len(TASK_STATUSES) else "Hoàn thành"
+    new_status = (
+        TASK_STATUSES[status_idx]
+        if 0 <= status_idx < len(TASK_STATUSES)
+        else "Hoàn thành"
+    )
     await query.answer()
 
     db = SheetsDB.get()
@@ -207,7 +240,9 @@ async def handle_task_move_callback(update: Update, context: ContextTypes.DEFAUL
     full_text = f"{header}\n\n{kanban_text}"
 
     try:
-        await query.edit_message_text(full_text, parse_mode=ParseMode.HTML, reply_markup=kanban_kb)
+        await query.edit_message_text(
+            full_text, parse_mode=ParseMode.HTML, reply_markup=kanban_kb
+        )
     except Exception:
         pass
 
@@ -227,8 +262,9 @@ async def cmd_donetask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
-                                         parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(
+            "❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.", parse_mode=ParseMode.HTML
+        )
         return
 
     result = db.update_task_status(task_id, "Hoàn thành")
@@ -292,8 +328,9 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     db = SheetsDB.get()
     linked = db.get_telegram_user(str(update.effective_user.id))
     if not linked:
-        await update.effective_message.reply_text("❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.",
-                                         parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text(
+            "❌ Chưa liên kết. Dùng /link &lt;Mã NV&gt;.", parse_mode=ParseMode.HTML
+        )
         return ConversationHandler.END
 
     # Resolve staff name + role for permission filtering
@@ -307,15 +344,27 @@ async def add_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not staff_name:
         staff_name = db.resolve_staff_name(linked)
 
-    projects = db.get_projects_for_user(staff_name, role) if staff_name else db.get_all_projects()
+    projects = (
+        db.get_projects_for_user(staff_name, role)
+        if staff_name
+        else db.get_all_projects()
+    )
     if not projects:
         await update.effective_message.reply_text("❌ Bạn không có dự án nào.")
         return ConversationHandler.END
 
     context.user_data["add_task"] = {}
-    context.user_data["staff_name"] = staff_name  # dùng trong add_confirm để so sánh creator
-    buttons = [[InlineKeyboardButton(f"{p['id']} — {p['name']}", callback_data=f"ap:{p['id']}")]
-               for p in projects]
+    context.user_data["staff_name"] = (
+        staff_name  # dùng trong add_confirm để so sánh creator
+    )
+    buttons = [
+        [
+            InlineKeyboardButton(
+                f"{p['id']} — {p['name']}", callback_data=f"ap:{p['id']}"
+            )
+        ]
+        for p in projects
+    ]
     buttons.append([InlineKeyboardButton("❌ Hủy", callback_data="ap:cancel")])
     await update.effective_message.reply_text(
         "📁 Chọn dự án cho nhiệm vụ:",
@@ -333,19 +382,142 @@ async def add_got_project(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return ConversationHandler.END
 
     context.user_data["add_task"]["project_id"] = data
-    await query.edit_message_text(f"✏️ Nhập <b>tên nhiệm vụ</b>:", parse_mode=ParseMode.HTML)
+
+    db = SheetsDB.get()
+    all_projects = db.get_all_projects()
+    project = next((p for p in all_projects if p["id"] == data), None)
+    existing_tasks = project["tasks"] if project else []
+    active_tasks = [
+        t for t in existing_tasks
+        if (t.get(T_STATUS) or "").strip() != "Hoàn thành"
+    ]
+    context.user_data["add_task"]["_existing_tasks"] = active_tasks
+
+    buttons = [
+        [InlineKeyboardButton("✅ Có — Chọn nhiệm vụ cha", callback_data="asc:yes")],
+        [InlineKeyboardButton("❌ Không — Tạo nhiệm vụ chính", callback_data="asc:no")],
+        [InlineKeyboardButton("✖️ Hủy", callback_data="asc:cancel")],
+    ]
+    await query.edit_message_text(
+        f"📁 Dự án: <b>{data}</b>\n\n"
+        "Bạn muốn tạo <b>nhiệm vụ con</b> (phụ thuộc vào một nhiệm vụ khác) "
+        "hay <b>nhiệm vụ chính</b>?",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+    return ADD_SUBTASK_CHOICE
+
+
+async def add_got_subtask_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    choice = query.data.split(":", 1)[1]
+
+    if choice == "cancel":
+        await query.edit_message_text("❌ Đã hủy.")
+        return ConversationHandler.END
+
+    existing_tasks = context.user_data["add_task"].get("_existing_tasks", [])
+
+    if choice == "no" or not existing_tasks:
+        if choice == "yes" and not existing_tasks:
+            await query.edit_message_text(
+                "ℹ️ Dự án chưa có nhiệm vụ nào để chọn làm cha.\n"
+                "✔️ Sẽ tạo nhiệm vụ chính.\n\n"
+                "✏️ Nhập <b>tên nhiệm vụ</b>:",
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await query.edit_message_text(
+                "✏️ Nhập <b>tên nhiệm vụ</b>:",
+                parse_mode=ParseMode.HTML,
+            )
+        context.user_data["add_task"]["parent_task_id"] = None
+        return ADD_NAME
+
+    buttons = []
+    for t in existing_tasks[:15]:
+        tid = t.get(T_ID, "")
+        tname = t.get(T_NAME, "")
+        st_emoji = STATUS_EMOJI.get((t.get(T_STATUS) or "").strip(), "📌")
+        prio_emoji = PRIORITY_EMOJI.get((t.get(T_PRIORITY) or "").strip(), "")
+        label = f"{st_emoji}{prio_emoji} {tid} — {tname[:30]}"
+        buttons.append([InlineKeyboardButton(label, callback_data=f"apt:{tid}")])
+    buttons.append([InlineKeyboardButton("✖️ Hủy", callback_data="apt:cancel")])
+
+    await query.edit_message_text(
+        "📋 Chọn <b>nhiệm vụ cha</b>:",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(buttons),
+    )
+    return ADD_PARENT_TASK
+
+
+async def add_got_parent_task(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data.split(":", 1)[1]
+
+    if data == "cancel":
+        await query.edit_message_text("❌ Đã hủy.")
+        return ConversationHandler.END
+
+    context.user_data["add_task"]["parent_task_id"] = data
+    await query.edit_message_text(
+        f"🔗 Nhiệm vụ cha: <code>{data}</code>\n\n"
+        "✏️ Nhập <b>tên nhiệm vụ con</b>:",
+        parse_mode=ParseMode.HTML,
+    )
     return ADD_NAME
 
 
 async def add_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["add_task"][T_NAME] = update.message.text.strip()
+    await update.effective_message.reply_text(
+        "⏰ Nhập <b>hạn chốt</b> (dd/mm/yyyy) hoặc gõ <b>skip</b> để bỏ qua:",
+        parse_mode=ParseMode.HTML,
+    )
+    return ADD_DUE
+
+
+async def add_got_due(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    import re as _re
+    text = update.message.text.strip()
+    due_iso = ""
+    if text.lower() not in ("skip", "bỏ qua", "-"):
+        m = _re.match(r"^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$", text)
+        if m:
+            dd, mm, yyyy = m.group(1), m.group(2), m.group(3)
+            due_iso = f"{yyyy}-{mm.zfill(2)}-{dd.zfill(2)}"
+        elif _re.match(r"^\d{4}-\d{2}-\d{2}$", text):
+            due_iso = text
+        else:
+            await update.effective_message.reply_text(
+                "❌ Ngày không hợp lệ. Nhập lại (dd/mm/yyyy) hoặc gõ <b>skip</b>:",
+                parse_mode=ParseMode.HTML,
+            )
+            return ADD_DUE
+    context.user_data["add_task"][T_DUE] = due_iso
+
     db = SheetsDB.get()
+    my_name = context.user_data.get("staff_name", "")
     staff_all = db.get_all_staff()
     names = [str(s.get("Họ tên", "")).strip() for s in staff_all if s.get("Họ tên")]
-    buttons = [[InlineKeyboardButton(n, callback_data=f"aa:{n}")] for n in names[:10]]
-    buttons.append([InlineKeyboardButton("⏭️ Bỏ qua", callback_data="aa:skip")])
+
+    buttons = []
+    if my_name:
+        buttons.append([
+            InlineKeyboardButton(f"👤 {my_name} (bạn - mặc định)", callback_data=f"aa:{my_name}")
+        ])
+    for n in names:
+        if n != my_name:
+            buttons.append([InlineKeyboardButton(n, callback_data=f"aa:{n}")])
+    buttons = buttons[:11]
+    buttons.append([InlineKeyboardButton("⏭️ Bỏ qua (chưa phân công)", callback_data="aa:skip")])
+
     await update.effective_message.reply_text(
-        "👤 Phân công cho ai?",
+        "👥 Giao nhiệm vụ này cho ai?\n<i>(mặc định: chính bạn)</i>",
+        parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(buttons),
     )
     return ADD_ASSIGNEE
@@ -354,43 +526,34 @@ async def add_got_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def add_got_assignee(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    data = query.data.split(":", 1)[1]
-    context.user_data["add_task"][T_ASSIGNEE] = "" if data == "skip" else data
-
-    buttons = [[InlineKeyboardButton(p, callback_data=f"apr:{p}")] for p in PRIORITIES]
-    await query.edit_message_text("⚡ Mức ưu tiên?", reply_markup=InlineKeyboardMarkup(buttons))
-    return ADD_PRIORITY
-
-
-async def add_got_priority(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-    data = query.data.split(":", 1)[1]
-    context.user_data["add_task"][T_PRIORITY] = data
-    await query.edit_message_text("⏰ Nhập hạn chót (YYYY-MM-DD) hoặc gõ <b>skip</b> để bỏ qua:",
-                                   parse_mode=ParseMode.HTML)
-    return ADD_DUE
-
-
-async def add_got_due(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    text = update.message.text.strip()
-    context.user_data["add_task"][T_DUE] = "" if text.lower() == "skip" else text
+    raw = query.data.split(":", 1)[1]
+    context.user_data["add_task"][T_ASSIGNEE] = "" if raw == "skip" else raw
 
     td = context.user_data["add_task"]
+    parent_id = td.get("parent_task_id")
+    parent_line = f"\n🔗 Nhiệm vụ cha: <code>{parent_id}</code>" if parent_id else ""
+    due_display = ""
+    if td.get(T_DUE):
+        parts = td[T_DUE].split("-")
+        due_display = f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else td[T_DUE]
+    assignee_display = td.get(T_ASSIGNEE) or context.user_data.get("staff_name") or "(chưa phân công)"
+
     summary = (
         f"📋 <b>Xác nhận tạo nhiệm vụ</b>\n\n"
-        f"Dự án: <code>{td.get('project_id')}</code>\n"
-        f"Tên: <b>{td.get(T_NAME)}</b>\n"
-        f"Người thực hiện: {td.get(T_ASSIGNEE) or '(chưa phân công)'}\n"
-        f"Ưu tiên: {td.get(T_PRIORITY)}\n"
-        f"Hạn chót: {td.get(T_DUE) or '(không có)'}\n"
+        f"📁 Dự án: <code>{td.get('project_id')}</code>{parent_line}\n"
+        f"📝 Tên: <b>{td.get(T_NAME)}</b>\n"
+        f"👤 Giao cho: <b>{assignee_display}</b>\n"
+        f"⏰ Hạn chốt: {due_display or '(không có)'}\n"
     )
     buttons = [
-        [InlineKeyboardButton("✅ Xác nhận", callback_data="ac:confirm"),
-         InlineKeyboardButton("❌ Hủy", callback_data="ac:cancel")],
+        [
+            InlineKeyboardButton("✅ Xác nhận tạo", callback_data="ac:confirm"),
+            InlineKeyboardButton("❌ Hủy", callback_data="ac:cancel"),
+        ],
     ]
-    await update.effective_message.reply_text(summary, parse_mode=ParseMode.HTML,
-                                     reply_markup=InlineKeyboardMarkup(buttons))
+    await query.edit_message_text(
+        summary, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(buttons)
+    )
     return ADD_CONFIRM
 
 
@@ -403,33 +566,68 @@ async def add_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return ConversationHandler.END
 
     td = context.user_data["add_task"]
+    creator_name = context.user_data.get("staff_name", "")
+    # Mặc định assignee = chính creator nếu skip
+    assignee = td.get(T_ASSIGNEE, "").strip() or creator_name
+
     task_data = {
         T_NAME: td.get(T_NAME, ""),
-        T_ASSIGNEE: td.get(T_ASSIGNEE, ""),
-        T_PRIORITY: td.get(T_PRIORITY, "Trung bình"),
+        T_ASSIGNEE: assignee,
+        T_PRIORITY: "Trung bình",
         T_DUE: td.get(T_DUE, ""),
         T_STATUS: "Chưa bắt đầu",
         T_COMPLETION: 0,
-        T_START: date.today().isoformat(),  # track creation date for reports
+        T_START: date.today().isoformat(),
     }
+    parent_id = td.get("parent_task_id")
+    if parent_id:
+        task_data["parent_task_id"] = parent_id
+
     db = SheetsDB.get()
     result = db.create_task(td["project_id"], task_data)
-    if result.get("success"):
-        task_id = result['taskId']
-        await query.edit_message_text(
-            f"✅ Đã tạo nhiệm vụ <code>{task_id}</code>: <b>{task_data[T_NAME]}</b>",
-            parse_mode=ParseMode.HTML,
-        )
-        # Thông báo cho người được giao (nếu khác người tạo)
-        assignee_name = task_data.get(T_ASSIGNEE, "").strip()
-        creator_name = context.user_data.get("staff_name", "")
-        if assignee_name and assignee_name != creator_name:
-            await _notify_task_assignee(
-                context.bot, db, assignee_name, task_id, task_data[T_NAME],
-                td.get("project_id", ""), creator_name
-            )
-    else:
+
+    if not result.get("success"):
         await query.edit_message_text(f"❌ {result.get('error', 'Lỗi tạo nhiệm vụ')}")
+        return ConversationHandler.END
+
+    task_id = result["taskId"]
+
+    # Thông báo cho assignee nếu khác creator
+    if assignee and assignee != creator_name:
+        await _notify_task_assignee(
+            context.bot, db, assignee, task_id, task_data[T_NAME],
+            td.get("project_id", ""), creator_name,
+        )
+
+    # Tính XP và chúc mừng creator
+    xp_info = ""
+    try:
+        if creator_name:
+            stats = db._compute_xp_stats(creator_name)
+            xp_info = (
+                f"\n\n🎉 <b>CHÚC MỪNG!</b> Bạn vừa tạo nhiệm vụ mới!\n"
+                f"🌟 <b>+10 XP</b> được cộng vào tài khoản\n"
+                f"⭐ Tổng điểm: <b>{stats['xp']} XP</b>\n"
+                f"{stats['level_icon']} Cấp độ: <b>Lv.{stats['level']} — {stats['level_name']}</b>\n"
+                f"✅ Hoàn thành: {stats['completed']} nhiệm vụ"
+            )
+    except Exception as _exc:
+        logger.debug("XP compute error after create_task: %s", _exc)
+
+    parent_line = f"\n🔗 Nhiệm vụ cha: <code>{parent_id}</code>" if parent_id else ""
+    due_display = ""
+    if td.get(T_DUE):
+        parts = td[T_DUE].split("-")
+        due_display = f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else td[T_DUE]
+
+    await query.edit_message_text(
+        f"✅ Đã tạo nhiệm vụ <code>{task_id}</code>!\n"
+        f"📝 <b>{task_data[T_NAME]}</b>{parent_line}\n"
+        f"👤 Giao cho: <b>{assignee}</b>\n"
+        f"⏰ Hạn chốt: {due_display or '(không có)'}"
+        f"{xp_info}",
+        parse_mode=ParseMode.HTML,
+    )
     return ConversationHandler.END
 
 
@@ -452,8 +650,15 @@ _MOTIVATIONAL_TIPS = [
 ]
 
 
-async def _notify_task_assignee(bot, db, assignee_name: str, task_id: str,
-                                 task_name: str, project_id: str, creator_name: str) -> None:
+async def _notify_task_assignee(
+    bot,
+    db,
+    assignee_name: str,
+    task_id: str,
+    task_name: str,
+    project_id: str,
+    creator_name: str,
+) -> None:
     """Gửi thông báo Telegram cho người được giao nhiệm vụ."""
     try:
         tg_id = db.get_telegram_user_by_name(assignee_name)
@@ -504,15 +709,15 @@ def register(app) -> None:
     add_conv = ConversationHandler(
         entry_points=[CommandHandler("addtask", add_start)],
         states={
-            ADD_PROJECT: [CallbackQueryHandler(add_got_project, pattern=r"^ap:")],
-            ADD_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_got_name)],
-            ADD_ASSIGNEE: [CallbackQueryHandler(add_got_assignee, pattern=r"^aa:")],
-            ADD_PRIORITY: [CallbackQueryHandler(add_got_priority, pattern=r"^apr:")],
-            ADD_DUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_got_due)],
-            ADD_CONFIRM: [CallbackQueryHandler(add_confirm, pattern=r"^ac:")],
+            ADD_PROJECT:        [CallbackQueryHandler(add_got_project,        pattern=r"^ap:")],
+            ADD_SUBTASK_CHOICE: [CallbackQueryHandler(add_got_subtask_choice, pattern=r"^asc:")],
+            ADD_PARENT_TASK:    [CallbackQueryHandler(add_got_parent_task,    pattern=r"^apt:")],
+            ADD_NAME:           [MessageHandler(filters.TEXT & ~filters.COMMAND, add_got_name)],
+            ADD_DUE:            [MessageHandler(filters.TEXT & ~filters.COMMAND, add_got_due)],
+            ADD_ASSIGNEE:       [CallbackQueryHandler(add_got_assignee,       pattern=r"^aa:")],
+            ADD_CONFIRM:        [CallbackQueryHandler(add_confirm,            pattern=r"^ac:")],
         },
         fallbacks=[CommandHandler("cancel", add_cancel)],
         allow_reentry=True,
     )
     app.add_handler(add_conv)
-
