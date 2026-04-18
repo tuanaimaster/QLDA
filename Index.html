@@ -76,7 +76,7 @@
                 </div>
                 <!-- XP progress bar -->
                 <div class="xp-bar-wrap mt-1">
-                  <div id="user-xp-bar" class="xp-bar-fill" style="width:0%"></div>
+                  <div id="user-xp-bar" class="xp-bar-fill" style="width: 0%"></div>
                 </div>
                 <div class="flex justify-between mt-0.5">
                   <span id="user-xp-label" class="text-xs text-purple-600 font-semibold">0 XP</span>
@@ -84,10 +84,21 @@
                 </div>
                 <!-- Layer 1: Hành vi hôm nay -->
                 <div class="header-daily-row" id="header-daily-row">
-                  <div class="header-stat-chip chip-new"><span class="chip-icon">🆕</span><span id="chip-val-new" class="chip-val">0</span></div>
-                  <div class="header-stat-chip chip-done"><span class="chip-icon">✔</span><span id="chip-val-done" class="chip-val">0</span></div>
-                  <button onclick="openCoinShop()" class="header-stat-chip chip-coin" title="Mở cửa hàng XGOLD">
-                    <span class="chip-icon">🏅</span><span id="user-coin-balance" class="chip-val">0</span>
+                  <div class="header-stat-chip chip-new">
+                    <span class="chip-icon">🆕</span
+                    ><span id="chip-val-new" class="chip-val">0</span>
+                  </div>
+                  <div class="header-stat-chip chip-done">
+                    <span class="chip-icon">✔</span
+                    ><span id="chip-val-done" class="chip-val">0</span>
+                  </div>
+                  <button
+                    onclick="openCoinShop()"
+                    class="header-stat-chip chip-coin"
+                    title="Mở cửa hàng XGOLD"
+                  >
+                    <span class="chip-icon">🏅</span
+                    ><span id="user-coin-balance" class="chip-val">0</span>
                   </button>
                 </div>
               </div>
@@ -257,23 +268,38 @@
         <div class="glass-card p-4 text-center">
           <!-- Phong Thủy Theme Picker -->
           <div class="theme-picker-wrap">
-            <div class="theme-picker-label">✨ Phù hợp phong thủy</div>
+            <div class="theme-picker-label">✨ Chọn màu Phù hợp phong thủy</div>
             <div class="theme-swatches">
-              <button class="theme-swatch" data-theme="kim"
+              <button
+                class="theme-swatch"
+                data-theme="kim"
                 style="background: linear-gradient(135deg, #93c5fd, #a5b4fc)"
-                title="Kim — Bạch Kim (Thanh thản)"></button>
-              <button class="theme-swatch" data-theme="moc"
+                title="Kim — Bạch Kim (Thanh thản)"
+              ></button>
+              <button
+                class="theme-swatch"
+                data-theme="moc"
                 style="background: linear-gradient(135deg, #6ee7b7, #34d399)"
-                title="Mộc — Lâm Phong (Phát triển)"></button>
-              <button class="theme-swatch" data-theme="thuy"
+                title="Mộc — Lâm Phong (Phát triển)"
+              ></button>
+              <button
+                class="theme-swatch"
+                data-theme="thuy"
                 style="background: linear-gradient(135deg, #38bdf8, #22d3ee)"
-                title="Thủy — Thương Hải (Trí tuệ)"></button>
-              <button class="theme-swatch" data-theme="hoa"
+                title="Thủy — Thương Hải (Trí tuệ)"
+              ></button>
+              <button
+                class="theme-swatch"
+                data-theme="hoa"
                 style="background: linear-gradient(135deg, #f9a8d4, #fb923c)"
-                title="Hỏa — Chu Hồng (Năng lượng)"></button>
-              <button class="theme-swatch" data-theme="tho"
+                title="Hỏa — Chu Hồng (Năng lượng)"
+              ></button>
+              <button
+                class="theme-swatch"
+                data-theme="tho"
                 style="background: linear-gradient(135deg, #fcd34d, #f59e0b)"
-                title="Thổ — Hoàng Kim (Vững chắc)"></button>
+                title="Thổ — Hoàng Kim (Vững chắc)"
+              ></button>
             </div>
           </div>
           <div class="text-sm font-semibold text-gray-700 mb-2">
@@ -639,10 +665,18 @@
               <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
                 <span>🎯</span> Nhiệm vụ hôm nay
               </h3>
-              <a href="#" data-section="achievements" class="nav-link text-xs text-purple-600 hover:underline font-medium">Xem tất cả →</a>
+              <a
+                href="#"
+                data-section="achievements"
+                class="nav-link text-xs text-purple-600 hover:underline font-medium"
+                >Xem tất cả →</a
+              >
             </div>
             <div id="overview-quests" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div class="quest-card"><div class="quest-icon">⏳</div><span class="text-sm text-gray-400">Đang tải...</span></div>
+              <div class="quest-card">
+                <div class="quest-icon">⏳</div>
+                <span class="text-sm text-gray-400">Đang tải...</span>
+              </div>
             </div>
           </div>
 
@@ -656,7 +690,7 @@
             </div>
 
             <div class="lg:col-span-2 glass-card">
-              <h3 class="text-lg font-semibold text-gray-900 mb-6">Nhiệm vụ ưu tiên cao</h3>
+              <h3 class="text-lg font-semibold text-gray-900 mb-6">Nhiệm vụ cần làm</h3>
               <div
                 id="priority-tasks-mini"
                 class="grid grid-cols-1 lg:grid-cols-2 gap-4 max-h-80 overflow-y-auto"
@@ -924,7 +958,9 @@
               <table class="w-full border-collapse">
                 <thead>
                   <tr class="bg-gray-50">
-                    <th class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900">
+                    <th
+                      class="border border-gray-200 px-4 py-3 text-left font-semibold text-gray-900"
+                    >
                       Chức năng
                     </th>
                     <th class="border border-gray-200 px-4 py-3 text-center">
@@ -960,121 +996,252 @@
                 <tbody>
                   <!-- Dự án -->
                   <tr>
-                    <td colspan="5" class="border border-gray-200 px-4 py-2 font-semibold text-blue-800 bg-blue-100">
+                    <td
+                      colspan="5"
+                      class="border border-gray-200 px-4 py-2 font-semibold text-blue-800 bg-blue-100"
+                    >
                       <i class="fas fa-folder-open mr-2"></i>QUẢN LÝ DỰ ÁN
                     </td>
                   </tr>
                   <tr>
                     <td class="border border-gray-200 px-4 py-3 text-sm">Tạo dự án mới</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ trong nhóm mình</div></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Chỉ trong nhóm mình</div>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Xem tất cả dự án</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ dự án của nhóm</div></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Chỉ dự án của nhóm</div>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr>
-                    <td class="border border-gray-200 px-4 py-3 text-sm">Sửa/xóa dự án được phân công</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ sửa trạng thái</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">
+                      Sửa/xóa dự án được phân công
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Chỉ sửa trạng thái</div>
+                    </td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Sao chép dự án</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr>
                     <td class="border border-gray-200 px-4 py-3 text-sm">Quản lý nhân viên</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ xem</div></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Chỉ xem</div>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
                   </tr>
 
                   <!-- Nhiệm vụ -->
                   <tr>
-                    <td colspan="5" class="border border-gray-200 px-4 py-2 font-semibold text-emerald-800 bg-emerald-100">
+                    <td
+                      colspan="5"
+                      class="border border-gray-200 px-4 py-2 font-semibold text-emerald-800 bg-emerald-100"
+                    >
                       <i class="fas fa-tasks mr-2"></i>QUẢN LÝ NHIỆM VỤ
                     </td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Tạo nhiệm vụ mới</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong dự án được giao</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Trong dự án được giao</div>
+                    </td>
                   </tr>
                   <tr>
-                    <td class="border border-gray-200 px-4 py-3 text-sm">Giao việc cho người khác</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong nhóm mình</div></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Nếu phụ trách dự án</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">
+                      Giao việc cho người khác
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Trong nhóm mình</div>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Nếu phụ trách dự án</div>
+                    </td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Xem tất cả nhiệm vụ</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong nhóm mình</div></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Trong nhóm &amp; dự án mình tham gia</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Trong nhóm mình</div>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Trong nhóm &amp; dự án mình tham gia</div>
+                    </td>
                   </tr>
                   <tr>
-                    <td class="border border-gray-200 px-4 py-3 text-sm">Sửa/xóa nhiệm vụ của mình</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">
+                      Sửa/xóa nhiệm vụ của mình
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Sao chép nhiệm vụ</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Nếu phụ trách dự án</div></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Nếu phụ trách dự án</div>
+                    </td>
                   </tr>
 
                   <!-- Thành tích -->
                   <tr>
-                    <td colspan="5" class="border border-gray-200 px-4 py-2 font-semibold text-purple-800 bg-purple-100">
+                    <td
+                      colspan="5"
+                      class="border border-gray-200 px-4 py-2 font-semibold text-purple-800 bg-purple-100"
+                    >
                       <i class="fas fa-trophy mr-2"></i>THÀNH TÍCH &amp; XP
                     </td>
                   </tr>
                   <tr>
                     <td class="border border-gray-200 px-4 py-3 text-sm">Xem bảng xếp hạng</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr class="bg-gray-50">
-                    <td class="border border-gray-200 px-4 py-3 text-sm">Nhận huy hiệu &amp; lên cấp</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">
+                      Nhận huy hiệu &amp; lên cấp
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr>
-                    <td class="border border-gray-200 px-4 py-3 text-sm">Broadcast thông báo nhóm</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><div class="text-xs text-gray-500">Chỉ nhóm mình</div></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-sm">
+                      Broadcast thông báo nhóm
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <div class="text-xs text-gray-500">Chỉ nhóm mình</div>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
                   </tr>
                   <tr class="bg-gray-50">
                     <td class="border border-gray-200 px-4 py-3 text-sm">Cấu hình hệ thống</td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-check text-green-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
-                    <td class="border border-gray-200 px-4 py-3 text-center"><i class="fas fa-times text-red-500 text-lg"></i></td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-check text-green-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
+                    <td class="border border-gray-200 px-4 py-3 text-center">
+                      <i class="fas fa-times text-red-500 text-lg"></i>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1106,12 +1273,13 @@
 
         <!-- Achievements Section -->
         <div id="achievements-section" class="section gm-section">
-
           <!-- ── Header ── -->
           <div class="flex items-center justify-between mb-6">
             <div>
               <h3 class="text-2xl font-bold text-gray-900">🏆 Thành tích &amp; Bảng xếp hạng</h3>
-              <p class="text-sm text-gray-500 mt-1">Theo dõi tiến độ, so sánh thành tích và nhận huy hiệu</p>
+              <p class="text-sm text-gray-500 mt-1">
+                Theo dõi tiến độ, so sánh thành tích và nhận huy hiệu
+              </p>
             </div>
           </div>
 
@@ -1125,18 +1293,29 @@
               <div class="streak-block-subtitle">Chuỗi Kiên trì làm việc</div>
             </div>
             <div id="streak-calendar" class="streak-calendar"></div>
-            <div style="text-align:center;">
-              <button id="commit-btn" class="commit-btn" onclick="handleCommitButton()">⚡ Tôi cam kết hôm nay</button>
+            <div style="text-align: center">
+              <button id="commit-btn" class="commit-btn" onclick="handleCommitButton()">
+                ⚡ Tôi cam kết hôm nay
+              </button>
             </div>
             <div class="streak-quests-label">— Mục tiêu hôm nay —</div>
-            <div id="daily-quests-list" class="grid grid-cols-1 md:grid-cols-3 gap-3 gm-quest-grid mt-3">
-              <div class="quest-card"><div class="quest-icon">⏳</div><span class="text-sm text-gray-400">Đang tải...</span></div>
+            <div
+              id="daily-quests-list"
+              class="grid grid-cols-1 md:grid-cols-3 gap-3 gm-quest-grid mt-3"
+            >
+              <div class="quest-card">
+                <div class="quest-icon">⏳</div>
+                <span class="text-sm text-gray-400">Đang tải...</span>
+              </div>
             </div>
           </div>
 
           <!-- ── Achievements grid (My Badges + Leaderboard, rendered by JS) ── -->
-          <div id="achievements-grid" class="gm-root grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            <div class="loading-card" style="grid-column:1/-1;">Đang tải thành tích...</div>
+          <div
+            id="achievements-grid"
+            class="gm-root grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+          >
+            <div class="loading-card" style="grid-column: 1/-1">Đang tải thành tích...</div>
           </div>
         </div>
 
@@ -1153,7 +1332,11 @@
               <button id="next-month" class="btn-secondary py-2 px-4">
                 <i class="fas fa-chevron-right ml-1"></i>
               </button>
-              <button id="today-month" class="btn-secondary py-2 px-3 text-sm text-blue-600 border-blue-300 hover:bg-blue-50" title="Về tháng hiện tại">
+              <button
+                id="today-month"
+                class="btn-secondary py-2 px-3 text-sm text-blue-600 border-blue-300 hover:bg-blue-50"
+                title="Về tháng hiện tại"
+              >
                 <i class="fas fa-calendar-day mr-1"></i>Hôm nay
               </button>
             </div>
@@ -1190,7 +1373,10 @@
       <div id="connect-section" class="section">
         <div class="mb-6">
           <h3 class="text-2xl font-bold text-gray-900 mb-1">🔗 Kết nối</h3>
-          <p class="text-gray-500">Liên kết tài khoản QLDA với Telegram để nhận thông báo và quản lý nhiệm vụ ngay trên điện thoại.</p>
+          <p class="text-gray-500">
+            Liên kết tài khoản QLDA với Telegram để nhận thông báo và quản lý nhiệm vụ ngay trên
+            điện thoại.
+          </p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1208,24 +1394,47 @@
             <!-- Steps -->
             <div class="space-y-3 mb-5">
               <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-                <p class="text-sm text-gray-700">Mở Telegram, tìm bot <b>@Trolytrieudobot</b> hoặc nhấn nút bên dưới</p>
+                <span
+                  class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5"
+                  >1</span
+                >
+                <p class="text-sm text-gray-700">
+                  Mở Telegram, tìm bot <b>@Trolytrieudobot</b> hoặc nhấn nút bên dưới
+                </p>
               </div>
               <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-                <p class="text-sm text-gray-700">Gửi lệnh <code class="bg-gray-100 px-1 rounded">/start</code></p>
+                <span
+                  class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5"
+                  >2</span
+                >
+                <p class="text-sm text-gray-700">
+                  Gửi lệnh <code class="bg-gray-100 px-1 rounded">/start</code>
+                </p>
               </div>
               <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-                <p class="text-sm text-gray-700">Nhấn <b>"🔗 Chọn tên để liên kết"</b> → chọn tên của bạn trong danh sách</p>
+                <span
+                  class="w-6 h-6 rounded-full bg-sky-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5"
+                  >3</span
+                >
+                <p class="text-sm text-gray-700">
+                  Nhấn <b>"🔗 Chọn tên để liên kết"</b> → chọn tên của bạn trong danh sách
+                </p>
               </div>
               <div class="flex items-start gap-3">
-                <span class="w-6 h-6 rounded-full bg-green-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">✓</span>
-                <p class="text-sm text-gray-700">Hoàn tất! Bot sẽ gửi thông báo nhiệm vụ cho bạn lúc 18:00 mỗi ngày</p>
+                <span
+                  class="w-6 h-6 rounded-full bg-green-500 text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5"
+                  >✓</span
+                >
+                <p class="text-sm text-gray-700">
+                  Hoàn tất! Bot sẽ gửi thông báo nhiệm vụ cho bạn lúc 18:00 mỗi ngày
+                </p>
               </div>
             </div>
-            <a href="https://t.me/Trolytrieudobot" target="_blank"
-               class="btn-primary w-full flex items-center justify-center gap-2">
+            <a
+              href="https://t.me/Trolytrieudobot"
+              target="_blank"
+              class="btn-primary w-full flex items-center justify-center gap-2"
+            >
               <i class="fab fa-telegram"></i> Mở Telegram Bot
             </a>
           </div>
@@ -1233,7 +1442,9 @@
           <!-- Card 2: Support Group -->
           <div class="glass-card p-6">
             <div class="flex items-center mb-4">
-              <div class="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mr-4">
+              <div
+                class="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center mr-4"
+              >
                 <i class="fas fa-users text-purple-500 text-2xl"></i>
               </div>
               <div>
@@ -1242,15 +1453,25 @@
               </div>
             </div>
             <p class="text-sm text-gray-600 mb-4">
-              Tham gia nhóm Telegram để nhận thông báo cập nhật hệ thống, hỏi đáp và hỗ trợ kỹ thuật từ đội ngũ phát triển.
+              Tham gia nhóm Telegram để nhận thông báo cập nhật hệ thống, hỏi đáp và hỗ trợ kỹ thuật
+              từ đội ngũ phát triển.
             </p>
             <ul class="space-y-2 mb-5 text-sm text-gray-600">
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> Thông báo cập nhật tính năng mới</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> Hỗ trợ lỗi và sự cố kỹ thuật</li>
-              <li class="flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> Chia sẻ kinh nghiệm quản lý dự án</li>
+              <li class="flex items-center gap-2">
+                <i class="fas fa-check-circle text-green-500"></i> Thông báo cập nhật tính năng mới
+              </li>
+              <li class="flex items-center gap-2">
+                <i class="fas fa-check-circle text-green-500"></i> Hỗ trợ lỗi và sự cố kỹ thuật
+              </li>
+              <li class="flex items-center gap-2">
+                <i class="fas fa-check-circle text-green-500"></i> Chia sẻ kinh nghiệm quản lý dự án
+              </li>
             </ul>
-            <a href="https://t.me/HotroQLDA" target="_blank"
-               class="btn-secondary w-full flex items-center justify-center gap-2">
+            <a
+              href="https://t.me/HotroQLDA"
+              target="_blank"
+              class="btn-secondary w-full flex items-center justify-center gap-2"
+            >
               <i class="fab fa-telegram"></i> Tham gia nhóm hỗ trợ
             </a>
           </div>
@@ -1267,7 +1488,7 @@
     <!-- Comment Panel -->
     <div id="comment-panel">
       <div id="comment-panel-header">
-        <i class="fas fa-comments" style="color:#8b5cf6"></i>
+        <i class="fas fa-comments" style="color: #8b5cf6"></i>
         <span id="comment-panel-title">Bình luận</span>
         <button id="comment-panel-close"><i class="fas fa-times"></i></button>
       </div>
@@ -1277,7 +1498,16 @@
         <button id="comment-submit"><i class="fas fa-paper-plane mr-1"></i>Gửi</button>
       </div>
     </div>
-    <div id="comment-panel-overlay" style="display:none;position:fixed;inset:0;z-index:1099;background:rgba(0,0,0,.25)"></div>
+    <div
+      id="comment-panel-overlay"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1099;
+        background: rgba(0, 0, 0, 0.25);
+      "
+    ></div>
 
     <?!= include('js'); ?>
   </body>

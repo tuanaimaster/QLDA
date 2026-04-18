@@ -5446,26 +5446,28 @@
       });
     }
 
-    var highPriorityTasks = userTasks.filter((task) => {
-      const priority = (task[COL.T_PRIORITY] || '').toLowerCase();
+    // All incomplete tasks, sorted by priority then deadline
+    var PRIORITY_ORDER = { 'Khẩn cấp': 0, 'Cao': 1, 'Trung bình': 2, 'Thấp': 3 };
+    var incompleteTasks = userTasks.filter((task) => {
       const status = (task[COL.T_STATUS] || '').toLowerCase();
-      return (priority.includes('cao') || priority.includes('khẩn')) && !status.includes('hoàn thành');
+      return !status.includes('hoàn thành');
     });
 
-    // Sort: Khẩn cấp first, then Cao, then by deadline (earliest first)
-    var PRIORITY_ORDER = { 'Khẩn cấp': 0, 'Cao': 1 };
-    highPriorityTasks.sort(function(a, b) {
-      var pa = PRIORITY_ORDER[a[COL.T_PRIORITY]] !== undefined ? PRIORITY_ORDER[a[COL.T_PRIORITY]] : 2;
-      var pb = PRIORITY_ORDER[b[COL.T_PRIORITY]] !== undefined ? PRIORITY_ORDER[b[COL.T_PRIORITY]] : 2;
+    incompleteTasks.sort(function(a, b) {
+      var pa = PRIORITY_ORDER[a[COL.T_PRIORITY]] !== undefined ? PRIORITY_ORDER[a[COL.T_PRIORITY]] : 4;
+      var pb = PRIORITY_ORDER[b[COL.T_PRIORITY]] !== undefined ? PRIORITY_ORDER[b[COL.T_PRIORITY]] : 4;
       if (pa !== pb) return pa - pb;
       var da = a[COL.T_DUE] ? new Date(a[COL.T_DUE]).getTime() : Infinity;
       var db = b[COL.T_DUE] ? new Date(b[COL.T_DUE]).getTime() : Infinity;
       return da - db;
     });
 
+    // Show top 10 tasks
+    var highPriorityTasks = incompleteTasks.slice(0, 10);
+
     if (highPriorityTasks.length === 0) {
       container.innerHTML =
-        '<div class="lg:col-span-2 text-center py-8 text-gray-500 text-sm">Không có nhiệm vụ ưu tiên cao</div>';
+        '<div class="lg:col-span-2 text-center py-8 text-gray-500 text-sm">Không có nhiệm vụ nào</div>';
       return;
     }
 
