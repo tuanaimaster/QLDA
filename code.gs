@@ -1905,6 +1905,7 @@ function _ensureCoinColumns() {
     STAFF_COIN_COLUMN_NAME, STAFF_BOOST_EXPIRES_COLUMN_NAME,
     STAFF_STREAK_FREEZE_COLUMN_NAME, STAFF_LAST_DAILY_COLUMN_NAME,
     STAFF_LAST_STREAK_COLUMN_NAME, STAFF_LAST_LEVEL_COLUMN_NAME,
+    'DailyGold', 'DailyGoldDate',
   ];
   const headers = getHeaders(sheet);
   let changed = false;
@@ -1964,6 +1965,11 @@ function rewardCoin(staffName, stats) {
 
     const gained  = [];
     let   total   = 0;
+
+    // Daily XGOLD cap
+    const DAILY_GOLD_CAP = 200;
+    const dailyGoldDate  = String(get('DailyGoldDate') || '').slice(0, 10);
+    let   dailyGoldEarned = (dailyGoldDate === todayStr) ? (Number(get('DailyGold')) || 0) : 0;
 
     // ── 1. Level-up reward ────────────────────────────────────────
     const newLevel = Number(stats.level) || 0;
@@ -2029,7 +2035,13 @@ function rewardCoin(staffName, stats) {
     });
 
     // ── Write final balance ───────────────────────────────────────
+    // Enforce daily XGOLD cap
+    const remaining = Math.max(0, DAILY_GOLD_CAP - dailyGoldEarned);
+    total = Math.min(total, remaining);
     if (total > 0) {
+      dailyGoldEarned += total;
+      set('DailyGold', dailyGoldEarned);
+      set('DailyGoldDate', todayStr);
       coin += total;
       set(STAFF_COIN_COLUMN_NAME, coin);
     }

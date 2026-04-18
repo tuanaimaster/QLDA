@@ -121,13 +121,7 @@
     11: { hard: false, badges: [{id:'quan_ly',   lv:2},{id:'ho_tro', lv:3},{id:'dung_han', lv:3}] },
   };
 
-  // Badge boost multipliers (additive, capped)
-  const BADGE_BOOSTS = [
-    { id: 'hoan_thanh', minLv: 3, bonus: 0.10 },
-    { id: 'lam_deu',    minLv: 3, bonus: 0.10 },
-    { id: 'ho_tro',     minLv: 2, bonus: 0.05 },
-  ];
-  const MAX_BADGE_BOOST_MULT = 1.30;
+  // Badge boost: removed — badges reward XGOLD only, no permanent XP %
 
   // Base XP by difficulty: easy=10, medium=20, hard=40, very hard=80
   const TASK_XP = {
@@ -185,16 +179,15 @@
     return LATE_PENALTY_MULT;
   }
 
-  // calculateXP: base XP × timing multiplier × impact multiplier (dependentCount)
+    // calculateXP: base × timing + impact bonus (additive) — hard cap 300 XP/task
   function calculateXP(task, doneDateOverride) {
-    var base = getTaskXP(task);
+    var rawBase = getTaskXP(task);
     var due  = task[COL.T_DUE]         ? new Date(task[COL.T_DUE])         : null;
     var done = doneDateOverride ? new Date(doneDateOverride) : (task[COL.T_REPORT_DATE] ? new Date(task[COL.T_REPORT_DATE]) : null);
-    base = Math.round(base * getTaskTimingMultiplier(due, done));
-    var dep = Math.min(parseInt(task[COL.T_DEPENDENT_COUNT] || task.dependentCount || 0), 20); // anti-cheat cap
-    var impactMult = Math.min(1 + dep * 0.1, 3.0);
-    base = Math.round(base * impactMult);
-    return Math.max(1, base);
+    var timedBase = Math.round(rawBase * getTaskTimingMultiplier(due, done));
+    var dep = Math.min(parseInt(task[COL.T_DEPENDENT_COUNT] || task.dependentCount || 0), 20);
+    var impactBonus = Math.min(Math.round(dep * rawBase * 0.25), 100);
+    return Math.min(300, Math.max(1, timedBase + impactBonus));
   }
 
   function getComboMultiplier(taskCount) {
@@ -292,9 +285,12 @@
     // First task daily bonus
     if (perDay[todayKey] && perDay[todayKey].count >= 1) xp += FIRST_TASK_DAILY_XP;
 
-    // +10 XP cho mỗi task do mình tạo (CREATE_TASK_XP)
+    // +CREATE_TASK_XP cho mỗi task do mình tạo đã được HOÀN THÀNH
     var createdTasks = allTasks.filter(function(t) { return (t[COL.T_CREATOR] || '') === staffName; });
-    xp += createdTasks.length * CREATE_TASK_XP;
+    var createdCompleted = createdTasks.filter(function(t) {
+      return (t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành');
+    });
+    xp += createdCompleted.length * CREATE_TASK_XP;
 
     // +20 XP cho mỗi task do mình giao cho người khác và họ đã hoàn thành
     var assignerBonusTasks = allTasks.filter(function(t) {
@@ -304,9 +300,13 @@
     });
     xp += assignerBonusTasks.length * ASSIGN_COMPLETE_ASSIGNER_XP;
 
-    // Fallback for old tasks without T_CREATOR: count assigned tasks (capped at 20)
+    // Fallback for old tasks without T_CREATOR: chỉ đếm task đã hoàn thành (capped at 20)
     if (createdTasks.length === 0) {
-      var legacyTasks = allTasks.filter(function(t) { return !t[COL.T_CREATOR] && t[COL.T_ASSIGNEE] === staffName; });
+      var legacyTasks = allTasks.filter(function(t) {
+        return !t[COL.T_CREATOR]
+            && t[COL.T_ASSIGNEE] === staffName
+            && (t[COL.T_STATUS] || '').toLowerCase().includes('hoàn thành');
+      });
       xp += Math.min(legacyTasks.length, 20) * CREATE_TASK_XP;
     }
 
@@ -364,24 +364,16 @@
     var commentXP = (todayComments + pastComments) * COMMENT_XP;
     xp += commentXP;
 
-    // Badge boosts (require intermediate stats for lookup — no circular ref)
-    var tempStats = {
-      completedAll: completedTasks.length, streak: streak,
-      assignerCount: assignerBonusTasks.length, onTimeRate: onTimeRate,
-    };
-    var boostMult = 1.0;
-    BADGE_BOOSTS.forEach(function(b) {
-      var badge = BADGE_DEFS.find(function(bd){ return bd.id === b.id; });
-      if (badge && getBadgeLevel(badge, tempStats) >= b.minLv) boostMult += b.bonus;
-    });
-    xp = Math.round(xp * Math.min(boostMult, MAX_BADGE_BOOST_MULT));
-
-    // Streak bonus (applied after badge boost)
+    // Streak bonus — applied to TODAY's task XP only (not cumulative total)
     var streakBonusPct = 0;
     for (var _si = 0; _si < STREAK_BONUSES.length; _si++) {
       if (streak >= STREAK_BONUSES[_si].days) { streakBonusPct = STREAK_BONUSES[_si].pct; break; }
     }
-    if (streakBonusPct > 0) xp = Math.round(xp * (1 + streakBonusPct));
+    if (streakBonusPct > 0 && perDay[todayKey]) {
+      var _todayComboM = getComboMultiplier(perDay[todayKey].count);
+      var _todayTaskXP = Math.round(perDay[todayKey].baseXP * _todayComboM);
+      xp += Math.round(_todayTaskXP * streakBonusPct);
+    }
 
     return {
       xp: xp,
@@ -407,7 +399,6 @@
       todayComboMult: todayComboMult,
       todayCompletedCount: todayCompletedCount,
       commentCount: commentCounts.total || 0,
-      badgeBoostMult: Math.min(boostMult, MAX_BADGE_BOOST_MULT),
       streakBonusPct: streakBonusPct,
       completionDaysArr: Object.keys(perDay),
     };
