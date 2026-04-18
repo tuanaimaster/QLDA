@@ -2076,7 +2076,7 @@
   function showCoinPopup(amount, reason) {
     var popup = document.createElement('div');
     popup.className = 'coin-popup-toast';
-    popup.innerHTML = '<span class="coin-toast-icon">🪙</span> <strong>+' + amount + '</strong> ' + (reason || '');
+    popup.innerHTML = '<span class="coin-toast-icon xgold-icon">🏅</span> <strong>+' + amount + '</strong> XGOLD ' + (reason || '');
     document.body.appendChild(popup);
     requestAnimationFrame(function() {
       popup.classList.add('coin-popup-show');
@@ -2100,20 +2100,20 @@
       modal.innerHTML =
         '<div class="coin-shop-modal">' +
           '<div class="coin-shop-header">' +
-            '<span class="coin-shop-title">🏪 Cửa hàng Coin</span>' +
+            '<span class="coin-shop-title">🏪 Cửa hàng XGOLD</span>' +
             '<button onclick="closeCoinShop()" class="coin-shop-close">✕</button>' +
           '</div>' +
-          '<div class="coin-shop-balance">Số dư: <strong>🪙 <span id="shop-coin-display">' + coin + '</span></strong></div>' +
+          '<div class="coin-shop-balance">XGOLD: <strong>🏅 <span id="shop-coin-display">' + coin + '</span></strong></div>' +
           '<div class="coin-shop-items">' +
             '<div class="coin-shop-item">' +
               '<div class="shop-item-icon">⚡</div>' +
               '<div class="shop-item-info"><div class="shop-item-name">XP Boost x2</div><div class="shop-item-desc">Nhân đôi XP trong 24h</div></div>' +
-              '<button class="shop-buy-btn" onclick="buyShopItem(\'XP_BOOST\', 50, this)">50 🪙</button>' +
+              '<button class="shop-buy-btn" onclick="buyShopItem(\'XP_BOOST\', 50, this)">50 🏅</button>' +
             '</div>' +
             '<div class="coin-shop-item">' +
               '<div class="shop-item-icon">🛡️</div>' +
               '<div class="shop-item-info"><div class="shop-item-name">Streak Freeze</div><div class="shop-item-desc">Bảo vệ chuỗi ngày 1 lần</div></div>' +
-              '<button class="shop-buy-btn" onclick="buyShopItem(\'STREAK_FREEZE\', 30, this)">30 🪙</button>' +
+              '<button class="shop-buy-btn" onclick="buyShopItem(\'STREAK_FREEZE\', 30, this)">30 🏅</button>' +
             '</div>' +
           '</div>' +
         '</div>';
@@ -7681,15 +7681,35 @@
         '<section class="gm-panel gm-xp-guide" style="grid-column:1/-1;">' +
           '<div class="gm-panel-head"><h3 class="gm-panel-title">📊 Bảng điểm XP</h3></div>' +
           '<div class="gm-xp-grid">' +
-            _xpRow('🟢', 'Dễ (easy)', '10 XP', '#059669') +
+            _xpHead('🎯 XP theo độ khó nhiệm vụ') +
+            _xpRow('🟢', 'Dễ', '10 XP', '#059669') +
             _xpRow('🔵', 'Trung bình', '20 XP', '#0284c7') +
-            _xpRow('🟠', 'Khó (hard)', '40 XP', '#ea580c') +
+            _xpRow('🟠', 'Khó', '40 XP', '#ea580c') +
             _xpRow('🔴', 'Rất khó', '80 XP', '#dc2626') +
-            _xpRow('⚡', 'Sớm hạn', '+50%', '#10b981') +
+            _xpHead('⏱️ Hệ số thời gian') +
+            _xpRow('⚡', 'Trước hạn', '+50%', '#10b981') +
             _xpRow('⏰', 'Đúng hạn', '+20%', '#0891b2') +
             _xpRow('🐢', 'Trễ hạn', '-30%', '#ef4444') +
-            _xpRow('🔥', 'Combo 3/5/10', '×1.2 / ×1.5 / ×2', '#7c3aed') +
-            _xpRow('👥', 'Phụ thuộc +1', '+10% XP (tối đa ×3)', '#0f766e') +
+            _xpHead('🔥 Combo & Phụ thuộc') +
+            _xpRow('🔥', 'Combo 3 / 5 / 10 NV', '×1.2 / ×1.5 / ×2', '#7c3aed') +
+            _xpRow('👥', 'Mỗi task phụ thuộc', '+10% (tối đa ×3)', '#0f766e') +
+            _xpHead('🌟 Chuỗi ngày (Streak)') +
+            _xpRow('🔥', '3 ngày liên tiếp', '+10%', '#f59e0b') +
+            _xpRow('🔥', '7 ngày liên tiếp', '+20%', '#ef4444') +
+            _xpRow('🔥', '30 ngày liên tiếp', '+50%', '#dc2626') +
+            _xpHead('📝 Hoạt động khác') +
+            _xpRow('📝', 'Tạo nhiệm vụ', '+15 XP', '#6366f1') +
+            _xpRow('💬', 'Bình luận (≤10/ngày)', '+3 XP', '#0891b2') +
+            _xpRow('🤝', 'Hoàn thành task được giao', '+30 XP bonus', '#7c3aed') +
+            _xpHead('🏅 Huy hiệu lên cấp') +
+            _xpRow('✅', 'Hoàn thành: lv1→lv5', '+20 → +400 XP', '#059669') +
+            _xpRow('🔥', 'Làm đều: lv1→lv5', '+15 → +300 XP', '#ef4444') +
+            _xpRow('🤲', 'Giao việc: lv1→lv5', '+20 → +340 XP', '#8b5cf6') +
+            _xpRow('⏰', 'Đúng hạn: lv1→lv5', '+20 → +320 XP', '#0891b2') +
+            _xpHead('🏅 Thưởng XGOLD') +
+            _xpRow('🏅', 'Hoàn thành nhiệm vụ', '+ XGOLD', '#d97706') +
+            _xpRow('🏅', 'Streak & Lên cấp', '+ XGOLD bonus', '#b45309') +
+            _xpRow('🏅', 'Dùng để mua: Boost XP / Streak Freeze', '50 / 30 🏅', '#92400e') +
           '</div>' +
         '</section>';
 
@@ -7718,6 +7738,10 @@
     '</div>';
   }
 
+  function _xpHead(title) {
+    return '<div class="gm-xp-section-head">' + title + '</div>';
+  }
+
   // ── Badge mini-card for roadmap ───────────────────────────────────────────
   function _renderTierBadgeMini(badgeId, stats, storedLevels) {
     var badge = BADGE_DEFS.find(function(b){ return b.id === badgeId; });
@@ -7729,10 +7753,16 @@
     var isLocked = lv === 0 && pct < 10;
     var isNear   = lv === 0 && pct >= 10 && pct < 100;
     var cls = 'gm-road-badge-mini' + (isLocked ? ' locked' : '') + (isNear ? ' near' : '');
+    var curVal = Math.round(Number(badge.getValue(stats)) || 0);
+    var nextTarget = (lv < maxLv) ? badge.levels[Math.max(0, lv)].target : (badge.levels[maxLv - 1] ? badge.levels[maxLv - 1].target : 0);
+    var progressText = (lv >= maxLv)
+      ? ('MAX · ' + curVal + ' ' + badge.unit)
+      : (curVal + ' / ' + nextTarget + ' ' + badge.unit);
     return '<div class="' + cls + '">' +
       '<span class="gm-road-badge-mini-icon">' + badge.icon + '</span>' +
       '<div class="gm-road-badge-mini-info">' +
         '<div class="gm-road-badge-mini-name">' + badge.name + (lv > 0 ? ' <b>Lv.' + lv + '</b>' : '') + '</div>' +
+        '<div class="gm-road-badge-mini-count">' + progressText + '</div>' +
         '<div class="gm-road-badge-mini-bar"><div class="gm-road-badge-mini-fill" style="width:' + pct + '%"></div></div>' +
       '</div>' +
     '</div>';
@@ -7747,9 +7777,13 @@
       if (!badge) return '';
       var got = getDisplayBadgeLevel(badge, stats, storedLevels);
       var ok = got >= r.lv;
+      var lvlCfg = badge.levels.find(function(l){ return l.lv === r.lv; }) || {};
+      var target = lvlCfg.target != null ? lvlCfg.target : r.lv;
+      var curVal = Math.round(Number(badge.getValue(stats)) || 0);
+      var unit = badge.unit || '';
+      var progressStr = ok ? '' : ' <span class="gm-road-req-cur">(' + curVal + '/' + target + ')</span>';
       return '<li class="gm-road-req-item' + (ok ? ' met' : '') + '">' +
-        (ok ? '✅' : '🔒') + ' ' + badge.name + ' Lv.' + r.lv +
-        (ok ? '' : ' <span class="gm-road-req-cur">(có Lv.' + got + ')</span>') +
+        (ok ? '✅' : '🔒') + ' ' + badge.name + ': ' + target + ' ' + unit + progressStr +
       '</li>';
     }).join('');
     return '<div class="gm-road-unlock-req">' +
