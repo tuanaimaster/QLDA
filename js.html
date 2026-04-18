@@ -4175,7 +4175,7 @@
       if (key !== 'id') data[key] = value;
     }
 
-    if (type === 'task') {
+    if (type === 'task' || type === 'project') {
       const disabledFields = form.querySelectorAll(
         'input[disabled], textarea[disabled], select[disabled]'
       );
@@ -4419,6 +4419,8 @@
       if (isNaN(date.getTime())) return '';
 
       const year = date.getFullYear();
+      // Reject obviously corrupt years (e.g. year 3 from bad sheet data)
+      if (year < 1970 || year > 2100) return '';
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
 
