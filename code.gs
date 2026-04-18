@@ -115,7 +115,7 @@ function getInitialDataFast() {
     // Batch get tất cả sheets cùng lúc
     const ranges = [
       `'${PROJECT_SHEET_NAME}'!A:I`, // Projects với tất cả columns
-      `'${STAFF_SHEET_NAME}'!A:P`, // Staff (includes coin columns)
+      `'${STAFF_SHEET_NAME}'!A:K`, // Staff (core columns up to Avatar)
     ];
 
     const response = Sheets.Spreadsheets.Values.batchGet(spreadsheetId, {

@@ -695,6 +695,13 @@
       .withSuccessHandler(function (response) {
         hideLoading();
 
+        // Guard against null response (GAS deserialize failure or authorization issue)
+        if (!response) {
+          console.warn('getInitialDataWithAuth: null response, showing login');
+          showLoginModal();
+          return;
+        }
+
         if (response.requireLogin) {
           // User not logged in, show login modal
           showLoginModal();
