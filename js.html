@@ -497,7 +497,7 @@
   }
 
   function updateUserGameUI() {
-    if (!currentUser || !allTasks.length) return;
+    if (!currentUser) return;
     var stats = computeUserGameStats(currentUser.name || '');
     var lvl = stats.level;
     var nextLvl = LEVELS.find(function(l) { return l.level === lvl.level + 1; });

@@ -429,10 +429,34 @@ function getDataForUser() {
         });
       } else {
         // === Nhân viên: xem dự án mình tham gia, có nhiệm vụ, hoặc đã tạo task ===
+        // Case-insensitive name match to handle data entry inconsistencies
+        const myName = (currentUser.name || '').trim().toLowerCase();
         tasks = tasks.filter((task) => {
-          return String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim() === currentUser.name
-            || String(task[TASK_CREATED_BY_COLUMN_NAME] || '').trim() === currentUser.name;
+          const assignee = String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim().toLowerCase();
+          const creator  = String(task[TASK_CREATED_BY_COLUMN_NAME] || '').trim().toLowerCase();
+          return assignee === myName || creator === myName;
         });
+
+        // Also include tasks from participant-projects that are assigned TO this user
+        // (handles case where task was assigned using different casing)
+        const participantProjectIds = projects
+          .filter((project) => {
+            const participants = String(project[PROJECT_PARTICIPANTS_COLUMN_NAME] || '')
+              .split(',').map((s) => s.trim()).filter(Boolean);
+            return participants.some(p => p.toLowerCase() === myName)
+              || (project[PROJECT_MANAGER_COLUMN_NAME] || '').trim().toLowerCase() === myName;
+          })
+          .map((p) => p[PROJECT_ID_COLUMN_NAME]);
+
+        if (participantProjectIds.length > 0 && tasks.length === 0) {
+          // Fallback: if no tasks matched by name, show tasks in participant projects where they're assigned
+          const allTasksAgain = getTasks();
+          const fallback = allTasksAgain.filter((task) => {
+            const assignee = String(task[TASK_ASSIGNEE_COLUMN_NAME] || '').trim().toLowerCase();
+            return assignee === myName && participantProjectIds.includes(task[TASK_PROJECT_ID_COLUMN_NAME]);
+          });
+          if (fallback.length > 0) tasks = fallback;
+        }
 
         const userTaskProjectIds = new Set(
           tasks.map((task) => task[TASK_PROJECT_ID_COLUMN_NAME]).filter((id) => id)
@@ -443,7 +467,8 @@ function getDataForUser() {
           // Kiểm tra danh sách người tham gia
           const participants = String(project[PROJECT_PARTICIPANTS_COLUMN_NAME] || '')
             .split(',').map((s) => s.trim()).filter(Boolean);
-          return participants.includes(currentUser.id) || participants.includes(currentUser.name);
+          return participants.includes(currentUser.id) || participants.includes(currentUser.name)
+            || participants.some(p => p.toLowerCase() === myName);
         });
       }
 
