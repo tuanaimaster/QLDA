@@ -5,7 +5,6 @@ handlers/tasks.py — /mytasks, /donetask, /assign, /addtask (ConversationHandle
 from __future__ import annotations
 
 import logging
-import random
 from datetime import date
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -677,12 +676,12 @@ async def _notify_task_assignee(
     project_id: str,
     creator_name: str,
 ) -> None:
-    """Gửi thông báo Telegram cho người được giao nhiệm vụ."""
+    """Gửi thông báo Telegram cho người được giao nhiệm vụ (mascot engine)."""
     try:
-        tg_id = db.get_telegram_user_by_name(assignee_name)
+        tg_id = str(db.get_telegram_user_by_name(assignee_name) or "").strip()
         if not tg_id:
             return
-        tip = random.choice(_MOTIVATIONAL_TIPS)
+
         # Lookup project name
         project_name = project_id
         try:
@@ -693,25 +692,25 @@ async def _notify_task_assignee(
         except Exception:
             pass
 
-        lines = [
-            "📬 <b>BẠN CÓ NHIỆM VỤ MỚI ĐƯỢC GIAO!</b>",
-            "",
-            f"📋 Nhiệm vụ: <b>{task_name}</b>",
-            f"🆔 Mã: <code>{task_id}</code>",
-            f"📁 Dự án: {project_name}",
-        ]
-        if creator_name:
-            lines.append(f"👤 Người giao: <b>{creator_name}</b>")
-        lines += [
-            "",
-            "⭐ <b>+10 XP</b> được cộng vào tài khoản của bạn!",
-            "",
-            tip,
-            "",
-            "Dùng /mytasks để xem danh sách nhiệm vụ của bạn.",
-        ]
-        await bot.send_message(chat_id=tg_id, text="\n".join(lines), parse_mode="HTML")
-        logger.info("Task notif sent via bot → %s (%s)", assignee_name, tg_id)
+        from mascot import (
+            BehaviorContext, MascotEvent, build_task_assigned,
+            registry, resolve_emotion,
+        )
+        from utils.mascot_image import generate_mascot_card_typed
+        ctx = BehaviorContext()
+        emotion = resolve_emotion(MascotEvent.TASK_ASSIGNED, ctx)
+        caption = build_task_assigned(task_name, task_id, project_name, creator_name, emotion)
+        mascot_url = registry.get_url(MascotEvent.TASK_ASSIGNED, emotion)
+        photo_source = mascot_url or generate_mascot_card_typed(MascotEvent.TASK_ASSIGNED, emotion)
+
+        try:
+            await bot.send_photo(chat_id=tg_id, photo=photo_source,
+                                 caption=caption, parse_mode="HTML")
+            logger.info("Task notif (photo) sent → %s [%s]", assignee_name, emotion.value)
+        except Exception as photo_exc:
+            logger.warning("Photo send failed, falling back to text: %s", photo_exc)
+            await bot.send_message(chat_id=tg_id, text=caption, parse_mode="HTML")
+            logger.info("Task notif (text) sent → %s [%s]", assignee_name, emotion.value)
     except Exception as exc:
         logger.error("_notify_task_assignee error: %s", exc)
 

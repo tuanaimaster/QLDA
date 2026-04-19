@@ -1,0 +1,92 @@
+{
+  "_comment": "mascot_config.json — Thay URL thật vào đây. Ghi đè default map trong mascot.py.",
+  "_note": "Key = MascotEvent.value, Emotion key = MascotEmotion.value",
+  "_reload": "Gọi mascot.registry.reload() hoặc restart bot để áp dụng.",
+
+  "created": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/tasky_new.png"
+    ]
+  },
+  "assigned": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/tasky_wave.png",
+      "https://cdn.example.com/qlda/mascots/tasky_mail.png"
+    ],
+    "hype": [
+      "https://cdn.example.com/qlda/mascots/tasky_rocket.png"
+    ]
+  },
+  "completed": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/tasky_smile.png",
+      "https://cdn.example.com/qlda/mascots/tasky_happy.png"
+    ],
+    "hype": [
+      "https://cdn.example.com/qlda/mascots/tasky_party.png",
+      "https://cdn.example.com/qlda/mascots/tasky_jump.png"
+    ],
+    "sarcastic": [
+      "https://cdn.example.com/qlda/mascots/tasky_sus.png",
+      "https://cdn.example.com/qlda/mascots/tasky_eyeroll.png"
+    ],
+    "fire_mode": [
+      "https://cdn.example.com/qlda/mascots/tasky_fire.png"
+    ]
+  },
+  "deadline_warning": {
+    "sarcastic": [
+      "https://cdn.example.com/qlda/mascots/clocky_stare.png"
+    ],
+    "urgent": [
+      "https://cdn.example.com/qlda/mascots/clocky_alarm.png",
+      "https://cdn.example.com/qlda/mascots/clocky_sweat.png"
+    ]
+  },
+  "level_up": {
+    "hype": [
+      "https://cdn.example.com/qlda/mascots/levelup_burst.png",
+      "https://cdn.example.com/qlda/mascots/levelup_crown.png"
+    ],
+    "fire_mode": [
+      "https://cdn.example.com/qlda/mascots/levelup_explosion.png"
+    ]
+  },
+  "streak_active": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/streaky_glow.png"
+    ],
+    "hype": [
+      "https://cdn.example.com/qlda/mascots/streaky_fire_v1.png",
+      "https://cdn.example.com/qlda/mascots/streaky_fire_v2.png"
+    ],
+    "fire_mode": [
+      "https://cdn.example.com/qlda/mascots/streaky_inferno.png"
+    ]
+  },
+  "reward_xgold": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/goldy_reward.png"
+    ],
+    "fire_mode": [
+      "https://cdn.example.com/qlda/mascots/goldy_rain.png",
+      "https://cdn.example.com/qlda/mascots/goldy_swim.png"
+    ]
+  },
+  "badge_unlocked": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/badgy_shine.png"
+    ],
+    "hype": [
+      "https://cdn.example.com/qlda/mascots/badgy_flex.png"
+    ]
+  },
+  "daily_summary": {
+    "happy": [
+      "https://cdn.example.com/qlda/mascots/reporty_morning.png"
+    ],
+    "sarcastic": [
+      "https://cdn.example.com/qlda/mascots/reporty_yawn.png"
+    ]
+  }
+}
