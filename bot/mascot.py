@@ -222,6 +222,8 @@ class MascotRegistry:
             with path.open(encoding="utf-8") as f:
                 ext: _MascotMap = json.load(f)
             for ev_key, emotions in ext.items():
+                if ev_key.startswith("_") or not isinstance(emotions, dict):
+                    continue  # bỏ qua comment/metadata keys
                 if ev_key not in self._map:
                     self._map[ev_key] = {}
                 self._map[ev_key].update(emotions)
