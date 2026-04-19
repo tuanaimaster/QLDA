@@ -325,6 +325,17 @@ def build_task_assigned(task_name: str, task_id: str, project_name: str,
 
 def build_task_created(task_name: str, task_id: str, project_name: str,
                        creator: str, emotion: MascotEmotion) -> str:
+    tip = _pick(emotion, {
+        MascotEmotion.HAPPY: [
+            "💡 Tip: Bắt đầu sớm giúp bạn có thêm thời gian sửa lỗi!",
+            "📌 Hãy dùng /mytasks để theo dõi tiến độ mỗi ngày.",
+            "🎯 Đặt reminder nhỏ cho bản thân trước deadline 1 ngày!",
+        ],
+        MascotEmotion.HYPE: [
+            "⚡ Nhiệm vụ mới = cơ hội XP mới! Bắt đầu ngay đi!",
+            "🔥 Hoàn thành trong 24h để nhận <b>Early Bird +5 XP</b>!",
+        ],
+    })
     from_line = f"\n👤 Người tạo: <b>{_esc(creator)}</b>" if creator else ""
     return (
         f"📋 <b>NHIỆM VỤ MỚI ĐÃ ĐƯỢC TẠO!</b>\n\n"
@@ -332,17 +343,19 @@ def build_task_created(task_name: str, task_id: str, project_name: str,
         f"🆔 Mã: <code>{_esc(task_id)}</code>\n"
         f"📁 Dự án: {_esc(project_name)}"
         f"{from_line}\n\n"
-        f"⭐ <b>+10 XP</b> được ghi nhận!\n\n"
-        f"Dùng /mytasks để xem nhiệm vụ."
+        f"⭐ <b>+10 XP</b> được ghi nhận khi tạo nhiệm vụ!\n\n"
+        f"{tip}\n\n"
+        f"Dùng /mytasks để xem và cập nhật tiến độ."
     )
 
 
 def build_task_completed(task_name: str, task_id: str, project_name: str,
-                         confirmed_by: str, emotion: MascotEmotion) -> str:
+                         confirmed_by: str, emotion: MascotEmotion,
+                         xp: int = 20) -> str:
     opening = _pick(emotion, {
         MascotEmotion.HAPPY: [
             "✅ <b>NHIỆM VỤ HOÀN THÀNH!</b>",
-            "✅ <b>XONG RỒI!</b>",
+            "✅ <b>XONG RỒI! TUYỆT VỜI!</b>",
         ],
         MascotEmotion.HYPE: [
             "🎉 <b>QUÁ ĐỈNH!!!</b>",
@@ -354,24 +367,33 @@ def build_task_completed(task_name: str, task_id: str, project_name: str,
         ],
         MascotEmotion.FIRE_MODE: [
             "💥 <b>KHÔNG THỂ DỪNG ĐƯỢC!</b>",
+            "🔥 <b>MỘT CHIẾN BINH THỰC THỤ!</b>",
+        ],
+    })
+    tip = _pick(emotion, {
+        MascotEmotion.HAPPY: [
+            "💡 Hoàn thành liên tiếp để nhận <b>Streak Bonus +10%</b>!",
+            "📈 Điểm XP tích lũy giúp bạn leo thứ hạng nhanh hơn!",
+            "🎯 Thử dùng /mytasks để xem nhiệm vụ tiếp theo nhé!",
+        ],
+        MascotEmotion.HYPE: [
+            "⚡ Đang trong streak — đừng để mất combo! Cày nhiệm vụ tiếp theo!",
+            "🚀 Hoàn thành 3 nhiệm vụ hôm nay để nhận <b>Daily Bonus!</b>",
+        ],
+        MascotEmotion.SARCASTIC: [
+            "😏 XP đã cộng rồi đó... lần sau cố gắng đúng deadline hơn nha!",
+            "💁 Nhớ cập nhật tiến độ sớm hơn để team không phải chờ!",
+        ],
+        MascotEmotion.FIRE_MODE: [
+            "🔥 Tốc độ của bạn đang bùng cháy! Giữ phong độ này nhé!",
+            "🏆 Bạn đang tiến gần đến Top Performer rồi!",
         ],
     })
     closing = _pick(emotion, {
-        MascotEmotion.HAPPY: [
-            "Tiếp tục phấn đấu nhé! 💪",
-            "Sắp lên cấp rồi, cố lên! ⭐",
-        ],
-        MascotEmotion.HYPE: [
-            "Cày tiếp đi! Hôm nay quá máu! 🔥",
-            "Đội mình cần người như bạn! 👑",
-        ],
-        MascotEmotion.SARCASTIC: [
-            "Lần sau nhanh hơn nha 😄",
-            "Không trễ là được rồi 😌",
-        ],
-        MascotEmotion.FIRE_MODE: [
-            "BẠN ĐANG BÙNG CHÁY! 🔥🔥🔥 KHÔNG DỪNG LẠI!",
-        ],
+        MascotEmotion.HAPPY:     ["Tiếp tục phấn đấu nhé! 💪", "Sắp lên cấp rồi, cố lên! ⭐"],
+        MascotEmotion.HYPE:      ["Cày tiếp đi! Hôm nay quá máu! 🔥", "Đội cần người như bạn! 👑"],
+        MascotEmotion.SARCASTIC: ["Lần sau nhanh hơn nha 😄", "Không trễ là được rồi 😌"],
+        MascotEmotion.FIRE_MODE: ["BẠN ĐANG BÙNG CHÁY! 🔥🔥🔥"],
     })
     by_line = f"\n👤 Xác nhận bởi: <b>{_esc(confirmed_by)}</b>" if confirmed_by else ""
     return (
@@ -380,7 +402,8 @@ def build_task_completed(task_name: str, task_id: str, project_name: str,
         f"🆔 <code>{_esc(task_id)}</code>\n"
         f"📁 {_esc(project_name)}"
         f"{by_line}\n\n"
-        f"🌟 <b>+XP điểm thưởng được cộng vào tài khoản!</b>\n\n"
+        f"🌟 <b>+{xp} XP đã được cộng vào tài khoản!</b>\n\n"
+        f"{tip}\n\n"
         f"{closing}"
     )
 
